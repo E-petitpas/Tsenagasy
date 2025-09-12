@@ -30,7 +30,6 @@ back/logs/
 
 # IDE files
 .vscode/
-.idea/
 *.swp
 *.swo
 *~
