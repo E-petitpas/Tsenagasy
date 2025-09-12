@@ -53,9 +53,6 @@ pids
 coverage/
 *.lcov
 
-# nyc test coverage
-.nyc_output
-
 # node-waf configuration
 .lock-wscript
 
