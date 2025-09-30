@@ -189,7 +189,7 @@ export function NewProductModal({ isOpen, onClose, onSave }: NewProductModalProp
 
               <div>
                 <Label htmlFor="category">Catégorie *</Label>
-                <Select value={formData.category} onValueChange={(value) => handleInputChange('category', value)}>
+                <Select value={formData.category} onValueChange={(value: any) => handleInputChange('category', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Sélectionnez une catégorie" />
                   </SelectTrigger>

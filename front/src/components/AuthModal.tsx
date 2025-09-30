@@ -1,308 +1,570 @@
-import React, { useState } from 'react';
-import { X, Mail, Lock, User, Phone, MapPin, Briefcase } from 'lucide-react';
+// front/src/authModal.tsx
+
+import React, { useState, useEffect } from 'react';
+import { Mail, Lock, User, Phone, MapPin, Eye, EyeOff } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import { getDemoUser } from '../config/demo';
+import axios, { AxiosError } from 'axios';
+import { API_BASE_URL } from '../config/api';
+import { toast } from 'sonner';
+import { AuthStorage, UserData } from '../config/authStorage';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLogin: (user: { name: string; type: 'client' | 'vendor'; accessToken?: string; id?: string }) => void;
+  onLogin: (user: UserData) => void;
+}
+
+interface ClientFormData {
+  name: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  phone: string;
+  location: string;
+}
+
+interface ApiSignupResponse {
+  supabaseSession?: {
+    access_token: string
+    refresh_token: string
+    expires_in: number
+    token_type: string
+  }
+  utilisateur?: { id?: string; email?: string; nom?: string; role?: string }
+  user?: { id?: string }
+  message?: string
+}
+
+interface AuthModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onLogin: (user: UserData) => void;  // ✅ directement UserData
 }
 
 export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
-  const [userType, setUserType] = useState<'client' | 'vendor'>('client');
-  const [formData, setFormData] = useState({
+  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isForgotMode, setIsForgotMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [isSending, setIsSending] = useState(false);
+
+  // Connexion (mode démo simple)
+  const [loginData, setLoginData] = useState({ email: '', password: '' });
+
+  // Inscription
+  const [clientData, setClientData] = useState<ClientFormData>({
     name: '',
     email: '',
     password: '',
+    confirmPassword: '',
     phone: '',
-    location: '',
-    businessName: '',
-    businessType: 'pme'
+    location: ''
   });
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  // Validations
+  const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const isValidPhoneMG = (phone: string) => /^(\+261|0)[0-9]{9}$/.test(phone.replace(/\s+/g, ''));
+
+  const resetForms = () => {
+    setLoginData({ email: '', password: '' });
+    setClientData({
+      name: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      phone: '',
+      location: ''
+    });
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Demo mode - if no email/password provided, use demo credentials
-    if (!formData.email || !formData.password) {
-      const demoUser = {
-        name: 'Utilisateur Demo',
-        type: 'client' as const,
-        accessToken: 'demo-token',
-        id: 'demo-user-id'
-      };
-      onLogin(demoUser);
-      onClose();
-      return;
-    }
-    
-    // Mode démo - utilise les utilisateurs prédéfinis
-    const demoUser = formData.email && formData.password ? 
-      {
-        ...getDemoUser(userType),
-        name: formData.name || getDemoUser(userType).name
-      } : 
-      {
-        name: formData.name || 'Utilisateur Demo',
-        type: userType,
-        accessToken: 'demo-token',
-        id: 'demo-user-id'
-      };
-    
-    onLogin(demoUser);
+  const handleClose = () => {
+    resetForms();
     onClose();
   };
 
-  const handleSignup = async (e: React.FormEvent) => {
+  useEffect(() => {
+    setErrors({});
+    resetForms();
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab("login");   // toujours revenir sur login
+      setErrors({});
+      resetForms();
+    }
+  }, [isOpen]);
+  
+  // Connexion
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
-    // Demo mode - if minimal info provided, create demo user
-    if (!formData.email || !formData.password || !formData.name) {
-      const demoUser = {
-        name: formData.name || 'Nouveau Utilisateur',
-        type: userType,
-        accessToken: 'demo-token',
-        id: 'demo-user-id'
-      };
-      onLogin(demoUser);
-      onClose();
+    if (isLoggingIn) return;
+    setIsLoggingIn(true);
+    setErrors({});
+
+    // Validation front avant d’aller au serveur
+    if (!loginData.email.trim()) {
+      setErrors({ email: "Email requis" });
+      setIsLoggingIn(false);
       return;
     }
-    
-    // Mode démo - crée un utilisateur de démonstration
-    const demoUser = {
-      ...getDemoUser(userType),
-      name: formData.name || getDemoUser(userType).name
+    if (!isValidEmail(loginData.email)) {
+      setErrors({ email: "Email invalide" });
+      setIsLoggingIn(false);
+      return;
+    }
+    if (!loginData.password.trim()) {
+      setErrors({ password: "Mot de passe requis" });
+      setIsLoggingIn(false);
+      return;
+    }
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/login`, {
+        email: loginData.email.toLowerCase().trim(),
+        motDePasse: loginData.password,
+      });
+
+      const data = response.data;
+      const loggedUser: UserData = {
+        name: data.utilisateur?.nom ,
+        type: (data.utilisateur?.role ) as UserData["type"],
+        accessToken: data.supabaseSession?.access_token,
+        id: data.utilisateur?.id || "",
+        email: data.utilisateur?.email,
+      };
+
+      AuthStorage.saveUser(loggedUser);
+      onLogin(loggedUser);
+      handleClose();
+    } catch (err) {
+      const error = err as AxiosError<{ message?: string }>;
+      const status = error.response?.status;
+
+      if (status === 404) {
+        setErrors({ email: "Utilisateur non existant" });
+      } else if (status === 401) {
+        setErrors({ password: "Mot de passe incorrect" });
+      } else {
+        setErrors({ general: error.response?.data?.message || "Erreur serveur" });
+      }
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+
+  // Inscription
+ const handleClientSignup = async (e: React.FormEvent<HTMLFormElement>) => {
+   e.preventDefault();
+  if (isSubmitting) return; // évite double clic rapide
+  setIsSubmitting(true);
+
+  const newErrors: { [key: string]: string } = {};
+
+  if (!clientData.name.trim()) {
+    newErrors.name = "Le nom est requis";
+  }
+  if (!clientData.email.trim()) {
+    newErrors.email = "L'email est requis";
+  } else if (!isValidEmail(clientData.email)) {
+    newErrors.email = "Adresse email invalide";
+  }
+  if (!clientData.password) {
+    newErrors.password = "Le mot de passe est requis";
+  } else if (clientData.password.length < 8) {
+    newErrors.password = "Minimum 8 caractères";
+  }
+  if (!clientData.confirmPassword) {
+    newErrors.confirmPassword = "Veuillez confirmer le mot de passe";
+  } else if (clientData.password !== clientData.confirmPassword) {
+    newErrors.confirmPassword = "Les mots de passe ne correspondent pas";
+  }
+  if (!clientData.phone.trim()) {
+    newErrors.phone = "Le numéro de téléphone est requis";
+  } else if (!isValidPhoneMG(clientData.phone)) {
+    newErrors.phone = "Format invalide (+261xxxxxxxxx ou 0xxxxxxxxx)";
+  }
+  if (!clientData.location.trim()) {
+    newErrors.location = "La localisation est requise";
+  }
+
+  if (Object.keys(newErrors).length > 0) {
+    setErrors(newErrors);
+    return;
+  }
+
+  // Si pas d’erreurs → on envoie
+  try {
+    const payload = {
+      nom: clientData.name.trim(),
+      email: clientData.email.toLowerCase().trim(),
+      motDePasse: clientData.password,
+      tel: clientData.phone.replace(/\s+/g, ""),
+      adresse: clientData.location.trim(),
+      role: "acheteur",
     };
-    onLogin(demoUser);
-    onClose();
+
+    const response = await axios.post<ApiSignupResponse>(
+      `${API_BASE_URL}/addUser`,
+      payload,
+      { timeout: 15000 }
+    );
+
+    const data = response.data ?? {};
+
+    // ✨ Sauvegarde aussi en storage
+    const newUser: UserData = {
+      name: clientData.name,
+      type: "client",
+      accessToken: data.supabaseSession?.access_token,
+      id: data.utilisateur?.id || data.user?.id || "",
+      email: clientData.email.toLowerCase().trim()
+    };
+
+    AuthStorage.saveUser(newUser);  
+    onLogin(newUser);   
+    handleClose();
+  } catch (err) {
+    const error = err as AxiosError<{ message?: string }>;
+    const status = error.response?.status;
+
+    if (status === 409) {
+      setErrors({ email: "Cette adresse email est déjà utilisée" });
+    } else {
+      setErrors({ email: error.response?.data?.message || "Erreur serveur" });
+    }
+  } finally {
+    setIsSubmitting(false); // réactive le bouton
+  }
+ };
+  
+  // mdp oublié
+  const handleForgotPassword = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) {
+      setErrors({ email: "Email requis" });
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      await axios.post(`${API_BASE_URL}/forgotPassword`, {
+        email: forgotEmail.toLowerCase().trim(),
+      });
+      toast.success("Un email de réinitialisation a été envoyé !");
+      setForgotEmail("");
+      setIsForgotMode(false); // retour à la connexion
+    } catch (err) {
+      const error = err as AxiosError<{ message?: string }>;
+      setErrors({ email: error.response?.data?.message || "Erreur serveur" });
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-md mx-auto max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl text-center text-[#2D8A47]">
-            Rejoindre Tsena.mg
+            Connexion à Tsena.mg
           </DialogTitle>
           <DialogDescription className="text-center text-gray-600">
-            Connectez-vous ou créez un compte pour découvrir le meilleur de Madagascar
+            Connectez-vous ou créez votre compte pour continuer
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="login" className="w-full">
+        <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v as 'login' | 'register')} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="login">Se connecter</TabsTrigger>
-            <TabsTrigger value="register">S'inscrire</TabsTrigger>
+            <TabsTrigger value="register">Créer un compte</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="login" className="space-y-4">
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <Label htmlFor="email">Email ou Téléphone</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="votre@email.mg (ou laissez vide pour le mode démo)"
-                    className="pl-10"
-                    value={formData.email}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
-                  />
+          {/* CONNEXION */}
+          <TabsContent value="login" className="space-y-4 mt-6">
+            {!isForgotMode ? (
+              // === FORMULAIRE LOGIN NORMAL ===
+              <form onSubmit={handleLogin} className="space-y-4">
+                {/* Email */}
+                <div className="space-y-2">
+                  <Label htmlFor="login-email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="login-email"
+                      type="email"
+                      placeholder="votre@email.com"
+                      className="pl-10"
+                      value={loginData.email}
+                      onChange={(e) => setLoginData(prev => ({ ...prev, email: e.target.value }))}
+                    />
+                  </div>
+                  {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
                 </div>
-              </div>
 
-              <div>
-                <Label htmlFor="password">Mot de passe</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    className="pl-10"
-                    value={formData.password}
-                    onChange={(e) => handleInputChange('password', e.target.value)}
-                  />
+                {/* Password */}
+                <div className="space-y-2">
+                  <Label htmlFor="login-password">Mot de passe</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="login-password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      className="pl-10 pr-10"
+                      value={loginData.password}
+                      onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
                 </div>
-              </div>
 
-              <div className="text-right">
-                <a href="#" className="text-sm text-[#2D8A47] hover:underline">
-                  Mot de passe oublié ?
-                </a>
-              </div>
+                {/* Lien Mot de passe oublié */}
+                <div className="text-right">
+                  <button
+                    type="button"
+                    onClick={() => setIsForgotMode(true)}
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    Mot de passe oublié ?
+                  </button>
+                </div>
 
-              <Button type="submit" className="w-full bg-[#2D8A47] hover:bg-[#245A35]">
-                Se connecter
-              </Button>
-              
-              <p className="text-xs text-center text-gray-500 mt-2">
-                💡 Astuce : Laissez les champs vides pour accéder au mode démo
-              </p>
-            </form>
+                {/* Bouton Se connecter */}
+                <Button type="submit" className="w-full bg-[#2D8A47] hover:bg-[#245A35]">
+                  {isLoggingIn ? "Connexion en cours..." : "Se connecter"}
+                </Button>
+              </form>
+            ) : (
+              // === FORMULAIRE MOT DE PASSE OUBLIÉ ===
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="forgot-email">Votre email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="forgot-email"
+                      type="email"
+                      placeholder="votre@email.com"
+                      className="pl-10"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                    />
+                  </div>
+                  {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+                </div>
+
+                <Button type="submit" className="w-full bg-[#2D8A47] hover:bg-[#245A35]">
+                  {isSending ? "Envoi en cours..." : "Envoyer le lien de réinitialisation"}
+                </Button>
+
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => setIsForgotMode(false)}
+                    className="text-sm text-gray-600 hover:underline"
+                  >
+                    ← Retour à la connexion
+                  </button>
+                </div>
+              </form>
+            )}
           </TabsContent>
 
-          <TabsContent value="register" className="space-y-4">
-            {/* User Type Selection */}
-            <div>
-              <Label>Je suis :</Label>
-              <RadioGroup
-                value={userType}
-                onValueChange={(value) => setUserType(value as 'client' | 'vendor')}
-                className="flex space-x-6 mt-2"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="client" id="client" />
-                  <Label htmlFor="client" className="flex items-center">
-                    <User className="h-4 w-4 mr-1" />
-                    Client
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="vendor" id="vendor" />
-                  <Label htmlFor="vendor" className="flex items-center">
-                    <Briefcase className="h-4 w-4 mr-1" />
-                    Vendeur
-                  </Label>
-                </div>
-              </RadioGroup>
-            </div>
-
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <Label htmlFor="name">Nom complet</Label>
+          {/* INSCRIPTION */}
+          <TabsContent value="register" className="space-y-4 mt-6">
+            <form onSubmit={handleClientSignup} className="space-y-4">
+              {/* Nom */}
+              <div className="space-y-2">
+                <Label htmlFor="client-name">Nom complet </Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
-                    id="name"
+                    id="client-name"
                     placeholder="Votre nom complet"
                     className="pl-10"
-                    value={formData.name}
-                    onChange={(e) => handleInputChange('name', e.target.value)}
+                    value={clientData.name}
+                    onChange={(e) => setClientData(prev => ({ ...prev, name: e.target.value }))}
+                    required
                   />
                 </div>
+                  {errors.name && (
+                    <p className="text-red-500 text-sm mt-1">{errors.name}</p>
+                  )}
               </div>
 
-              <div>
-                <Label htmlFor="reg-email">Email</Label>
+              {/* Email */}
+              <div className="space-y-2">
+                <Label htmlFor="client-email">Email </Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
-                    id="reg-email"
+                    id="client-email"
                     type="email"
-                    placeholder="votre@email.mg"
+                    placeholder="votre@email.com"
                     className="pl-10"
-                    value={formData.email}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    value={clientData.email}
+                    onChange={(e) => setClientData(prev => ({ ...prev, email: e.target.value }))}
+                    required
                   />
                 </div>
+                {errors.email && (
+                  <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+                )}
               </div>
 
-              <div>
-                <Label htmlFor="phone">Téléphone</Label>
+              {/* Téléphone */}
+              <div className="space-y-2">
+                <Label htmlFor="client-phone">Téléphone </Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
-                    id="phone"
-                    placeholder="+261 xx xxx xx xx"
+                    id="client-phone"
+                    placeholder="+261 34 12 345 67"
                     className="pl-10"
-                    value={formData.phone}
-                    onChange={(e) => handleInputChange('phone', e.target.value)}
+                    value={clientData.phone}
+                    onChange={(e) => setClientData(prev => ({ ...prev, phone: e.target.value }))}
+                    required
                   />
                 </div>
+                {errors.phone && (
+                  <p className="text-red-500 text-sm mt-1">{errors.phone}</p>
+                )}
               </div>
 
-              <div>
-                <Label htmlFor="location">Localisation</Label>
+              {/* Localisation */}
+              <div className="space-y-2">
+                <Label htmlFor="client-location">Localisation </Label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
-                    id="location"
+                    id="client-location"
                     placeholder="Antananarivo, Madagascar"
                     className="pl-10"
-                    value={formData.location}
-                    onChange={(e) => handleInputChange('location', e.target.value)}
+                    value={clientData.location}
+                    onChange={(e) => setClientData(prev => ({ ...prev, location: e.target.value }))}
+                    required
                   />
                 </div>
+                {errors.location && (
+                  <p className="text-red-500 text-sm mt-1">{errors.location}</p>
+                )}
               </div>
 
-              {userType === 'vendor' && (
-                <>
-                  <div>
-                    <Label htmlFor="businessName">Nom de l'entreprise/Commerce</Label>
-                    <Input
-                      id="businessName"
-                      placeholder="Votre commerce ou entreprise"
-                      value={formData.businessName}
-                      onChange={(e) => handleInputChange('businessName', e.target.value)}
-                    />
-                  </div>
-
-                  <div>
-                    <Label>Type de commerce</Label>
-                    <RadioGroup
-                      value={formData.businessType}
-                      onValueChange={(value) => handleInputChange('businessType', value)}
-                      className="mt-2"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="pme" id="pme" />
-                        <Label htmlFor="pme">PME</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="freelance" id="freelance" />
-                        <Label htmlFor="freelance">Freelance</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="particulier" id="particulier" />
-                        <Label htmlFor="particulier">Particulier</Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-                </>
-              )}
-
-              <div>
-                <Label htmlFor="reg-password">Mot de passe</Label>
+              {/* Mot de passe */}
+              <div className="space-y-2">
+                <Label htmlFor="client-password">Mot de passe </Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
-                    id="reg-password"
-                    type="password"
+                    id="client-password"
+                    type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
-                    className="pl-10"
-                    value={formData.password}
-                    onChange={(e) => handleInputChange('password', e.target.value)}
+                    className="pl-10 pr-10"
+                    value={clientData.password}
+                    onChange={(e) => setClientData(prev => ({ ...prev, password: e.target.value }))}
+                    required
                   />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
+                <p className="text-xs text-gray-500 mt-1">Au moins 8 caractères</p>
+                {errors.password && (
+                  <p className="text-red-500 text-sm mt-1">{errors.password}</p>
+                )}
               </div>
 
-              <Button 
-                type="button" 
-                onClick={handleSignup}
-                className="w-full bg-[#2D8A47] hover:bg-[#245A35]"
-              >
-                S'inscrire
+              {/* Confirmation */}
+              <div className="space-y-2">
+                <Label htmlFor="client-confirm-password">Confirmer le mot de passe </Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    id="client-confirm-password"
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    className="pl-10 pr-10"
+                    value={clientData.confirmPassword}
+                    onChange={(e) => setClientData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {errors.confirmPassword && (
+                  <p className="text-red-500 text-sm mt-1">{errors.confirmPassword}</p>
+                )}
+              </div>
+
+              <Button type="submit" className="w-full bg-[#2D8A47] hover:bg-[#245A35]">
+                {isSubmitting ? (
+                  <>
+                    <svg
+                      className="animate-spin h-5 w-5 mr-2 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 018 8h-4l3 3-3 3h4a8 8 0 01-8 8v-4l-3 3 3 3v-4a8 8 0 01-8-8z"
+                      ></path>
+                    </svg>
+                    Création en cours...
+                  </>
+                ) : (
+                  "Créer mon compte client"
+                )}
               </Button>
             </form>
           </TabsContent>
         </Tabs>
 
         <div className="text-center text-sm text-gray-500 mt-4">
-          En vous inscrivant, vous acceptez nos{' '}
-          <a href="#" className="text-[#2D8A47] hover:underline">Conditions d'utilisation</a>
+          En créant un compte, vous acceptez nos{' '}
+          <button
+            className="text-[#2D8A47] hover:underline"
+            onClick={() => toast.info("Conditions d'utilisation - Bientôt disponible")}
+          >
+            Conditions d'utilisation
+          </button>
         </div>
       </DialogContent>
     </Dialog>

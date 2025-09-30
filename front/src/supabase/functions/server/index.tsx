@@ -5,7 +5,7 @@ export default function handler() {
   return new Response(
     JSON.stringify({ 
       message: 'Mode démo activé - pas de serveur backend nécessaire',
-      status: 'disabled'
+      status: 'enabled'
     }),
     {
       headers: { 'Content-Type': 'application/json' },

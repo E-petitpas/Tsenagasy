@@ -9,15 +9,16 @@ import { CartCheckout } from '../components/CartCheckout';
 import { RechargeWalletModal } from '../components/RechargeWalletModal';
 import { TransferFundsModal } from '../components/TransferFundsModal';
 import { toast } from 'sonner';
-import { User } from '../App';
+import { UserData } from '../config/authStorage';
+import { VendorAuthModal } from '../components/vendorAuthModal';
 
 type Page = 'home' | 'product' | 'cart' | 'wallet' | 'locations' | 'search';
 
 interface HomeProps {
-  currentUser: User | null;
+  currentUser: UserData | null;
   cartItemCount: number;
   globalWalletBalance: number;
-  onLogin: (user: User) => void;
+  onLogin: (user: UserData) => void;
   onLogout: () => void;
   onAddToCart: (productId: string) => Promise<void>;
   onGlobalWalletRecharge: (amount: number, method: string) => void;
@@ -42,6 +43,7 @@ export default function Home({
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isWalletRechargeModalOpen, setIsWalletRechargeModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
 
   const handleProductClick = (productId: string) => {
     setSelectedProductId(productId);
@@ -119,7 +121,7 @@ export default function Home({
     }
   };
 
-  const handleLoginSuccess = (user: User) => {
+  const handleLoginSuccess = (user: UserData) => {
     onLogin(user);
     
     // Redirect users to their respective dashboard after login
@@ -308,7 +310,10 @@ export default function Home({
 
       <main>
         {/* Hero Banner */}
-        <PromoBanner />
+        <PromoBanner 
+          currentUser={currentUser}
+          onLogin={() => setIsAuthModalOpen(true)} 
+        />
 
         {/* Popular Products */}
         <PopularProducts
@@ -364,25 +369,22 @@ export default function Home({
             <div className="text-center mt-12">
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <button 
-                  onClick={navigateToVendorDashboard}
+                  onClick={() => setIsVendorModalOpen(true)}
                   className="bg-[#2D8A47] text-white px-6 py-3 rounded-lg hover:bg-[#245A35] transition-colors"
                 >
                   Devenir vendeur
                 </button>
+                <VendorAuthModal
+                  isOpen={isVendorModalOpen}
+                  onClose={() => setIsVendorModalOpen(false)}
+                  onLogin={handleLoginSuccess}
+                />
                 <button 
                   onClick={navigateToCart}
                   className="border border-[#2D8A47] text-[#2D8A47] px-6 py-3 rounded-lg hover:bg-[#2D8A47] hover:text-white transition-colors"
                 >
                   Voir mon panier ({cartItemCount})
                 </button>
-                {!currentUser && (
-                  <button 
-                    onClick={() => setIsAuthModalOpen(true)}
-                    className="bg-[#FFA726] text-white px-6 py-3 rounded-lg hover:bg-[#FF9800] transition-colors"
-                  >
-                    🚀 Mode Démo
-                  </button>
-                )}
               </div>
             </div>
           </div>

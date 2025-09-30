@@ -5,6 +5,7 @@ import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
 import { Avatar, AvatarFallback } from './ui/avatar';
+import { UserData } from '../config/authStorage';
 
 interface HeaderProps {
   cartItemCount?: number;
@@ -13,7 +14,7 @@ interface HeaderProps {
   onProfileClick?: () => void;
   onSearchClick?: (query: string) => void;
   onNavigationClick?: (section: string) => void;
-  currentUser?: { name: string; type: 'client' | 'vendor' } | null;
+  currentUser?: UserData | null;
 }
 
 export function Header({ cartItemCount = 0, onLoginClick, onCartClick, onProfileClick, onSearchClick, onNavigationClick, currentUser }: HeaderProps) {
@@ -77,7 +78,7 @@ export function Header({ cartItemCount = 0, onLoginClick, onCartClick, onProfile
             </Sheet>
             <div>
               <div className="text-2xl font-bold text-[#2D8A47]">Tsena.mg</div>
-              <div className="text-xs text-orange-600 font-medium hidden md:block">MODE DÉMO</div>
+              {/* <div className="text-xs text-orange-600 font-medium hidden md:block">MODE DÉMO</div> */}
             </div>
           </div>
 

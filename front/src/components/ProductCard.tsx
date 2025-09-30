@@ -109,7 +109,7 @@ export function ProductCard({ product, onAddToCart, onClick }: ProductCardProps)
 
         {/* Add to Cart Button */}
         <Button
-          onClick={(e) => {
+          onClick={(e: any) => {
             e.stopPropagation();
             onAddToCart(product.id);
           }}

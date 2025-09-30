@@ -1,41 +1,51 @@
-import React, { useState } from 'react';
+// front/src/App.tsx
+
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { toast, Toaster } from 'sonner';
+import { AuthStorage, UserData } from './config/authStorage';
 import Home from './pages/home';
-import ClientDashboard from './pages/clientDashboard';
+import ClientDashboardPage from './pages/clientDashboard';
 import VendorDashboard from './pages/vendorDashboard';
 
-export interface User {
-  name: string;
-  type: 'client' | 'vendor';
-  accessToken?: string;
-  id?: string;
-}
-
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserData | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [cartItemCount, setCartItemCount] = useState(0);
   const [globalWalletBalance, setGlobalWalletBalance] = useState(45000);
 
   // Afficher un message d'information sur le mode démo au chargement
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      toast.info('Mode Démonstration', {
-        description: 'Toutes les fonctionnalités sont simulées. Aucune donnée réelle n\'est utilisée.',
-        duration: 4000
-      });
-    }, 1000);
-    
-    return () => clearTimeout(timer);
+  useEffect(() => {
+    const checkSavedAuth = () => {
+      try {
+        const savedUser = AuthStorage.getUser();
+        if (savedUser && savedUser.accessToken) {
+          console.log('✅ Utilisateur trouvé en mémoire:', savedUser.name);
+          setCurrentUser(savedUser);
+          toast.success(`Bon retour ${savedUser.name} !`);
+        } else {
+          console.log('ℹ️ Aucun utilisateur sauvegardé');
+        }
+      } catch (error) {
+        console.error('Erreur lors de la récupération des données auth:', error);
+      } finally {
+        setIsLoadingAuth(false); // Chargement terminé
+      }
+    };
+
+    checkSavedAuth();
   }, []);
 
-  const handleLogin = (user: User) => {
+  const handleLogin = (user: UserData) => {
     setCurrentUser(user);
     toast.success(`Bienvenue ${user.name} !`);
   };
 
   const handleLogout = () => {
+    console.log('🚪 Déconnexion');
     setCurrentUser(null);
+    // ✅ NOUVEAU : Nettoyer la sauvegarde
+    AuthStorage.clearUser();
     toast.info('Vous êtes déconnecté');
   };
 
@@ -76,6 +86,17 @@ export default function App() {
     setCartItemCount
   };
 
+  if (isLoadingAuth) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#2D8A47] mx-auto mb-2"></div>
+          <p className="text-gray-600">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Router>
       <div className="min-h-screen bg-gray-50">
@@ -89,19 +110,25 @@ export default function App() {
           <Route 
             path="/client/*" 
             element={
-              currentUser?.type === 'client' ? 
-                <ClientDashboard {...sharedProps} /> : 
-                <Navigate to="/" replace />
-            } 
+              currentUser?.type === 'client' 
+                ? <ClientDashboardPage currentUser={currentUser as UserData & { type: "client" }} onLogout={handleLogout} /> 
+                : <Navigate to="/" replace />
+            }  
           />
           { <Route 
-            path="/vendor/*" 
-            element={
-              currentUser?.type === 'vendor' ? 
-                <VendorDashboard {...sharedProps} /> : 
-                <Navigate to="/" replace />
-            } 
-          /> }
+              path="/vendor/*" 
+              element={
+                currentUser?.type === 'vendor'
+                  ? (
+                    <VendorDashboard
+                      {...sharedProps}
+                      currentUser={currentUser as UserData & { type: "vendor" }}
+                    />
+                  ) : (
+                    <Navigate to="/" replace />
+                  )
+              }
+            /> }
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

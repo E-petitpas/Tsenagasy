@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { CreditCard, Smartphone, DivideCircle, Check, AlertCircle, Plus } from 'lucide-react';
 import { AddCardModal, SavedCard } from './AddCardModal';
 
