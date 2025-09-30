@@ -49,12 +49,16 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [loginErrors, setLoginErrors] = useState<{ [key: string]: string }>({});
+  const [registerErrors, setRegisterErrors] = useState<{ [key: string]: string }>({});
+  const [forgotErrors, setForgotErrors] = useState<{ [key: string]: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isForgotMode, setIsForgotMode] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const resetLoginForm = () => setLoginData({ email: "", password: "" });
+  const resetForgotForm = () => setForgotEmail("");
 
   // Connexion (mode démo simple)
   const [loginData, setLoginData] = useState({ email: '', password: '' });
@@ -89,19 +93,29 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
 
   const handleClose = () => {
     resetForms();
+    resetAllErrors();
     onClose();
   };
 
+  const resetAllErrors = () => {
+    setLoginErrors({});
+    setRegisterErrors({});
+    setForgotErrors({});
+  };
+
   useEffect(() => {
-    setErrors({});
     resetForms();
+    resetAllErrors();
+    if (activeTab === "register") {
+    setIsForgotMode(false); 
+  }
   }, [activeTab]);
 
   useEffect(() => {
     if (isOpen) {
       setActiveTab("login");   // toujours revenir sur login
-      setErrors({});
       resetForms();
+      resetAllErrors();
     }
   }, [isOpen]);
   
@@ -110,21 +124,21 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
     e.preventDefault();
     if (isLoggingIn) return;
     setIsLoggingIn(true);
-    setErrors({});
+    setLoginErrors({});
 
     // Validation front avant d’aller au serveur
     if (!loginData.email.trim()) {
-      setErrors({ email: "Email requis" });
+      setLoginErrors({ email: "Email requis" });
       setIsLoggingIn(false);
       return;
     }
     if (!isValidEmail(loginData.email)) {
-      setErrors({ email: "Email invalide" });
+      setLoginErrors({ email: "Email invalide" });
       setIsLoggingIn(false);
       return;
     }
     if (!loginData.password.trim()) {
-      setErrors({ password: "Mot de passe requis" });
+      setLoginErrors({ password: "Mot de passe requis" });
       setIsLoggingIn(false);
       return;
     }
@@ -152,14 +166,15 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
       const status = error.response?.status;
 
       if (status === 404) {
-        setErrors({ email: "Utilisateur non existant" });
+        setLoginErrors({ email: "Utilisateur non existant" });
       } else if (status === 401) {
-        setErrors({ password: "Mot de passe incorrect" });
+        setLoginErrors({ password: "Mot de passe incorrect" });
       } else {
-        setErrors({ general: error.response?.data?.message || "Erreur serveur" });
+        setLoginErrors({ general: error.response?.data?.message || "Erreur serveur" });
       }
     } finally {
       setIsLoggingIn(false);
+      resetLoginForm();
     }
   };
 
@@ -200,7 +215,7 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
   }
 
   if (Object.keys(newErrors).length > 0) {
-    setErrors(newErrors);
+    setRegisterErrors(newErrors);
     return;
   }
 
@@ -240,9 +255,9 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
     const status = error.response?.status;
 
     if (status === 409) {
-      setErrors({ email: "Cette adresse email est déjà utilisée" });
+      setRegisterErrors({ email: "Cette adresse email est déjà utilisée" });
     } else {
-      setErrors({ email: error.response?.data?.message || "Erreur serveur" });
+      setRegisterErrors({ email: error.response?.data?.message || "Erreur serveur" });
     }
   } finally {
     setIsSubmitting(false); // réactive le bouton
@@ -253,7 +268,7 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
   const handleForgotPassword = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!forgotEmail.trim()) {
-      setErrors({ email: "Email requis" });
+      setForgotErrors({ email: "Email requis" });
       return;
     }
 
@@ -267,9 +282,10 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
       setIsForgotMode(false); // retour à la connexion
     } catch (err) {
       const error = err as AxiosError<{ message?: string }>;
-      setErrors({ email: error.response?.data?.message || "Erreur serveur" });
+      setForgotErrors({ email: error.response?.data?.message || "Erreur serveur" });
     } finally {
       setIsSending(false);
+      resetForgotForm();
     }
   };
 
@@ -310,7 +326,7 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
                       onChange={(e) => setLoginData(prev => ({ ...prev, email: e.target.value }))}
                     />
                   </div>
-                  {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+                  {loginErrors.email && <p className="text-red-500 text-sm mt-1">{loginErrors.email}</p>}
                 </div>
 
                 {/* Password */}
@@ -334,14 +350,17 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                  {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
+                  {loginErrors.password && <p className="text-red-500 text-sm mt-1">{loginErrors.password}</p>}
                 </div>
 
                 {/* Lien Mot de passe oublié */}
                 <div className="text-right">
                   <button
                     type="button"
-                    onClick={() => setIsForgotMode(true)}
+                    onClick={() => { 
+                      resetAllErrors();
+                      setIsForgotMode(true);
+                    }}
                     className="text-sm text-blue-600 hover:underline"
                   >
                     Mot de passe oublié ?
@@ -369,7 +388,7 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
                       onChange={(e) => setForgotEmail(e.target.value)}
                     />
                   </div>
-                  {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+                  {forgotErrors.email && <p className="text-red-500 text-sm mt-1">{forgotErrors.email}</p>}
                 </div>
 
                 <Button type="submit" className="w-full bg-[#2D8A47] hover:bg-[#245A35]">
@@ -379,7 +398,10 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
                 <div className="text-center">
                   <button
                     type="button"
-                    onClick={() => setIsForgotMode(false)}
+                      onClick={() => { 
+                        resetAllErrors();
+                        setIsForgotMode(false);
+                      }}
                     className="text-sm text-gray-600 hover:underline"
                   >
                     ← Retour à la connexion
@@ -406,8 +428,8 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
                     required
                   />
                 </div>
-                  {errors.name && (
-                    <p className="text-red-500 text-sm mt-1">{errors.name}</p>
+                  {registerErrors.name && (
+                    <p className="text-red-500 text-sm mt-1">{registerErrors.name}</p>
                   )}
               </div>
 
@@ -426,8 +448,8 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
                     required
                   />
                 </div>
-                {errors.email && (
-                  <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+                {registerErrors.email && (
+                  <p className="text-red-500 text-sm mt-1">{registerErrors.email}</p>
                 )}
               </div>
 
@@ -445,8 +467,8 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
                     required
                   />
                 </div>
-                {errors.phone && (
-                  <p className="text-red-500 text-sm mt-1">{errors.phone}</p>
+                {registerErrors.phone && (
+                  <p className="text-red-500 text-sm mt-1">{registerErrors.phone}</p>
                 )}
               </div>
 
@@ -464,8 +486,8 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
                     required
                   />
                 </div>
-                {errors.location && (
-                  <p className="text-red-500 text-sm mt-1">{errors.location}</p>
+                {registerErrors.location && (
+                  <p className="text-red-500 text-sm mt-1">{registerErrors.location}</p>
                 )}
               </div>
 
@@ -492,8 +514,8 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
                   </button>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Au moins 8 caractères</p>
-                {errors.password && (
-                  <p className="text-red-500 text-sm mt-1">{errors.password}</p>
+                {registerErrors.password && (
+                  <p className="text-red-500 text-sm mt-1">{registerErrors.password}</p>
                 )}
               </div>
 
@@ -519,8 +541,8 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
                     {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                {errors.confirmPassword && (
-                  <p className="text-red-500 text-sm mt-1">{errors.confirmPassword}</p>
+                {registerErrors.confirmPassword && (
+                  <p className="text-red-500 text-sm mt-1">{registerErrors.confirmPassword}</p>
                 )}
               </div>
 

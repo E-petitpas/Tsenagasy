@@ -1,8 +1,8 @@
 // back/server.ts
 
-const express = require('express');
-const cors = require('cors');
-const routes = require('./src/routes/routes');
+import express from "express";
+import cors from "cors";
+import routes from "./src/routes/routes";
 
 const app = express();
 
@@ -14,8 +14,7 @@ app.use(express.json());
 // Permettre à Express de parser les données de formulaires URL-encodées
 app.use(express.urlencoded({ extended: true }));
 
-
-// === Routes ===
+// Routes 
 app.use('/api', routes);
 
 const PORT = process.env.PORT || 5000;
