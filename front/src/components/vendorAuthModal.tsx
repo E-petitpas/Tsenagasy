@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { Mail, Lock, User, Phone, MapPin, Briefcase } from "lucide-react";
+// front/src/componenents/vendorAuthModal.tsx
+import React, { useState, useEffect } from "react";
+import { Mail, Lock, User, Phone, MapPin, Eye, EyeOff } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -28,6 +29,8 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
   });
   const [errors, setErrors] = useState<{ [k: string]: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -37,6 +40,33 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
   const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isValidPhoneMG = (phone: string) => /^(\+261|0)[0-9]{9}$/.test(phone.replace(/\s+/g, ''));
 
+  const isFormValid =
+    formData.name.trim() &&
+    isValidEmail(formData.email) &&
+    isValidPhoneMG(formData.phone) &&
+    formData.location.trim() &&
+    formData.businessName.trim() &&
+    formData.password.length >= 8 &&
+    formData.confirmPassword;
+
+  useEffect(() => {
+    if (!isOpen) {
+      // Le modal vient d’être fermé → on nettoie tout
+      setErrors({});
+      setFormData({
+        name: "",
+        email: "",
+        phone: "",
+        location: "",
+        businessName: "",
+        businessType: "pme",
+        password: "",
+        confirmPassword: ""
+      });
+      setIsSubmitting(false);
+    }
+  }, [isOpen]);
+  
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
@@ -81,8 +111,8 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
         motDePasse: formData.password,
         tel: formData.phone.replace(/\s+/g, ""),
         adresse: formData.location.trim(),
-        commerceNom: formData.businessName.trim(),
-        commerceType: formData.businessType,
+        nomEntreprise: formData.businessName.trim(),
+        type: formData.businessType,
         role: "commercant",
       };
 
@@ -91,14 +121,24 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
 
       const newUser: UserData = {
         name: formData.name,
-        type: "vendor",
-        accessToken: data.supabaseSession?.access_token,
+        role: "vendor",
+        accessToken: data.token,
         id: data.utilisateur?.id || "",
         email: formData.email,
       };
 
       AuthStorage.saveUser(newUser);
       onLogin(newUser);
+      setFormData({
+        name: "",
+        email: "",
+        phone: "",
+        location: "",
+        businessName: "",
+        businessType: "pme",
+        password: "",
+        confirmPassword: ""
+      });
       onClose();
     } catch (err) {
       const error = err as AxiosError<{ message?: string }>;
@@ -110,7 +150,7 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md mx-auto max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg overflow-auto max-h-[90vh] p-8">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-[#2D8A47]">
             Créer un compte vendeur
@@ -120,7 +160,7 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSignup} className="space-y-7">
+        <form onSubmit={handleSignup} className="space-y-8">
           {/* Nom */}
           <div className="space-y-2">
             <Label htmlFor="name">Nom complet</Label>
@@ -131,7 +171,7 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
           </div>
 
           {/* Email */}
-          <div className="space-y-2">
+          <div className="space-y-2 mt-2">
             <Label htmlFor="email">Email</Label>
             <Input id="email" type="email" placeholder="exemple@domaine.com"
               value={formData.email}
@@ -140,7 +180,7 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
           </div>
 
           {/* Téléphone */}
-          <div className="space-y-2">
+          <div className="space-y-2 mt-2">
             <Label htmlFor="phone">Téléphone</Label>
             <Input id="phone" type="tel" placeholder="+261 34 12 345 67"
               value={formData.phone}
@@ -149,7 +189,7 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
           </div>
 
           {/* Localisation */}
-          <div className="space-y-2">
+          <div className="space-y-2 mt-2">
             <Label htmlFor="location">Localisation</Label>
             <Input id="location" placeholder="Antananarivo, Madagascar"
               value={formData.location}
@@ -158,7 +198,7 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
           </div>
 
           {/* Nom entreprise */}
-          <div className="space-y-2">
+          <div className="space-y-2 mt-2">
             <Label htmlFor="businessName">Nom de l’entreprise</Label>
             <Input id="businessName" placeholder="Ex: Boutique TsenaGasy"
               value={formData.businessName}
@@ -167,7 +207,7 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
           </div>
 
           {/* Type de commerce */}
-          <div className="space-y-2">
+          <div className="space-y-2 mt-2">
             <Label>Type de commerce</Label>
             <RadioGroup className="flex flex-col gap-2 p-2 border rounded-md"
               value={formData.businessType}
@@ -188,21 +228,51 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
           </div>
 
           {/* Mot de passe */}
-          <div className="space-y-2">
+          <div className="space-y-2 mt-2">
             <Label htmlFor="password">Mot de passe</Label>
-            <Input id="password" type="password" placeholder="••••••••"
-              value={formData.password}
-              onChange={(e) => handleChange("password", e.target.value)} />
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                className="pl-10 pr-10"
+                value={formData.password}
+                onChange={(e) => handleChange("password", e.target.value)}
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             <p className="text-xs text-gray-500 mt-1">Au moins 8 caractères</p>
             {errors.password && <p className="text-red-500 text-xs">{errors.password}</p>}
           </div>
 
           {/* Confirmation */}
-          <div className="space-y-2">
+          <div className="space-y-2 mt-2">
             <Label htmlFor="confirmPassword">Confirmer mot de passe</Label>
-            <Input id="confirmPassword" type="password" placeholder="••••••••"
-              value={formData.confirmPassword}
-              onChange={(e) => handleChange("confirmPassword", e.target.value)} />
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                id="confirmPassword"
+                type={showConfirmPassword ? "text" : "password"}
+                placeholder="••••••••"
+                className="pl-10 pr-10"
+                value={formData.confirmPassword}
+                onChange={(e) => handleChange("confirmPassword", e.target.value)}
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             {errors.confirmPassword && <p className="text-red-500 text-xs">{errors.confirmPassword}</p>}
           </div>
 
@@ -214,7 +284,7 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
           )}
 
           {/* Bouton */}
-          <Button type="submit" className="w-full bg-[#2D8A47] py-3 text-lg mt-6">
+          <Button type="submit" className="w-full bg-[#2D8A47] py-3 text-lg mt-6" disabled={!isFormValid || isSubmitting}>
             {isSubmitting ? "Création en cours..." : "Créer mon compte vendeur"}
           </Button>
         </form>

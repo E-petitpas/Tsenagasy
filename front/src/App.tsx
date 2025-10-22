@@ -7,6 +7,7 @@ import { AuthStorage, UserData } from './config/authStorage';
 import Home from './pages/home';
 import ClientDashboardPage from './pages/clientDashboard';
 import VendorDashboard from './pages/vendorDashboard';
+import AdminDashboard from './pages/adminDashboard';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
@@ -14,17 +15,26 @@ export default function App() {
   const [cartItemCount, setCartItemCount] = useState(0);
   const [globalWalletBalance, setGlobalWalletBalance] = useState(45000);
 
-  // Afficher un message d'information sur le mode démo au chargement
   useEffect(() => {
+    const adminUser: UserData = {
+    id: '1',
+    name: 'AdminTest',
+    email: 'admin@mail.com',
+    role: 'admin',
+    accessToken: 'fake-token',
+    };
+    setCurrentUser(adminUser);
+    setIsLoadingAuth(false);
+    
     const checkSavedAuth = () => {
       try {
         const savedUser = AuthStorage.getUser();
         if (savedUser && savedUser.accessToken) {
-          console.log('✅ Utilisateur trouvé en mémoire:', savedUser.name);
+          console.log('Utilisateur trouvé en mémoire:', savedUser.name);
           setCurrentUser(savedUser);
           toast.success(`Bon retour ${savedUser.name} !`);
         } else {
-          console.log('ℹ️ Aucun utilisateur sauvegardé');
+          console.log(' Aucun utilisateur sauvegardé');
         }
       } catch (error) {
         console.error('Erreur lors de la récupération des données auth:', error);
@@ -42,9 +52,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    console.log('🚪 Déconnexion');
     setCurrentUser(null);
-    // ✅ NOUVEAU : Nettoyer la sauvegarde
     AuthStorage.clearUser();
     toast.info('Vous êtes déconnecté');
   };
@@ -110,7 +118,7 @@ export default function App() {
           <Route 
             path="/client/*" 
             element={
-              currentUser?.type === 'client' 
+              currentUser?.role === 'client' 
                 ? <ClientDashboardPage currentUser={currentUser as UserData & { type: "client" }} onLogout={handleLogout} /> 
                 : <Navigate to="/" replace />
             }  
@@ -118,17 +126,19 @@ export default function App() {
           { <Route 
               path="/vendor/*" 
               element={
-                currentUser?.type === 'vendor'
-                  ? (
-                    <VendorDashboard
-                      {...sharedProps}
-                      currentUser={currentUser as UserData & { type: "vendor" }}
-                    />
-                  ) : (
-                    <Navigate to="/" replace />
-                  )
+                currentUser?.role === 'vendor'
+                  ? <VendorDashboard currentUser={currentUser as UserData & { type: "vendor" }} onLogout={handleLogout} /> 
+                  : <Navigate to="/" replace />
               }
             /> }
+          <Route
+            path="/admin"
+            element={
+              currentUser?.role === 'admin'
+                ? <AdminDashboard />
+                : <Navigate to="/" replace />
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

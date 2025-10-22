@@ -6,8 +6,8 @@ import { VendorAuthModal } from './vendorAuthModal';
 import { UserData } from '../config/authStorage';
 
 interface PromoBannerProps {
-  currentUser: UserData | null;
-  onLogin: () => void;
+ currentUser: UserData | null;
+  onLogin: (user: UserData) => void;
 }
 
 export function PromoBanner({ onLogin }: PromoBannerProps) {
@@ -95,7 +95,7 @@ export function PromoBanner({ onLogin }: PromoBannerProps) {
       <VendorAuthModal 
         isOpen={isVendorModalOpen} 
         onClose={() => setIsVendorModalOpen(false)} 
-        onLogin={onLogin} 
+        onLogin={onLogin}
       />
     </div>
   );

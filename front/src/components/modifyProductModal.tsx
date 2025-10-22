@@ -12,16 +12,17 @@ import axios from 'axios';
 import { AuthStorage } from "../config/authStorage";
 import { toast } from "sonner";
 
-interface NewProductModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (product: any) => void;
-  categories: { id: string; nom: string }[];
+interface ModifyProductModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (updatedProduct: any) => Promise<void>;
+    product: any;
+    categories: { id: string; nom: string }[];
 }
 
 const currentUser = AuthStorage.getUser();
 
-export function NewProductModal({ isOpen, onClose, onSave, categories }: NewProductModalProps) {
+export function ModifyProductModal({ isOpen, onClose, onSave, product , categories}: ModifyProductModalProps) {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -32,49 +33,52 @@ export function NewProductModal({ isOpen, onClose, onSave, categories }: NewProd
     tags: '',
     weight: '',
     dimensions: '',
-    materials: ''
+    materials: '',
+    status: ''
   });
 
   const [dragActive, setDragActive] = useState(false);
-  const [savingDraft, setSavingDraft] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
 
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen) return;
+
+    if (product) {
       setFormData({
-        name: '',
-        description: '',
-        price: '',
-        stock: '',
-        category: '',
-        images: [],
-        tags: '',
-        weight: '',
-        dimensions: '',
-        materials: ''
+        name: product.nom || '',
+        description: product.description || '',
+        price: product.price?.toString() || '',
+        stock: product.stock?.toString() || '',
+        category: product.category || '',
+        images: product.images || [],
+        tags: Array.isArray(product.tags) ? product.tags.join(', ') : product.tags || '',
+        weight: product.weight?.toString() || '',
+        dimensions: product.dimensions || '',
+        materials: product.materials || '',
+        status: product.status || ''
       });
     }
-  }, [isOpen]);
+  }, [isOpen, product]);
+
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleImageUpload = (files: FileList | null) => {
-    if (formData.images.length >= 5) {
+    if (!files) return;
+
+    const totalImages = formData.images.length + files.length;
+
+    if (totalImages > 5) {
       return;
     }
 
-    if (files) {
-      if (formData.images.length + files.length > 5) {
-        alert("Vous pouvez télécharger maximum 5 images.");
-        return;
-      }
-      setFormData(prev => ({
-        ...prev,
-        images: [...prev.images, ...Array.from(files)]
-      }));
-    }
+    setFormData(prev => ({
+      ...prev,
+      images: [...prev.images, ...Array.from(files)]
+    }));
   };
 
   const removeImage = (index: number) => {
@@ -87,7 +91,6 @@ export function NewProductModal({ isOpen, onClose, onSave, categories }: NewProd
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragActive(false);
-    if (formData.images.length >= 5) return;
     handleImageUpload(e.dataTransfer.files);
   };
 
@@ -100,12 +103,58 @@ export function NewProductModal({ isOpen, onClose, onSave, categories }: NewProd
     setDragActive(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent, statut: "brouillon" | "en_attente") => {
+  const savechange = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaving(true);
 
-    // Définir le spinner sur le bouton correspondant
-    if (statut === "brouillon") setSavingDraft(true);
-    else setPublishing(true);
+    try {
+        const fd = new FormData();
+        fd.append("nom", formData.name);
+        fd.append("description", formData.description);
+        fd.append("prix", formData.price);
+        fd.append("stock", formData.stock);
+        fd.append("categorieId", formData.category);
+        fd.append("commercantId", currentUser?.id || "");
+        fd.append("tags", formData.tags);
+        fd.append("poids", formData.weight);
+        fd.append("dimensions", formData.dimensions);
+        fd.append("materiaux", formData.materials);
+
+        // Anciennes images gardées
+        const oldImages = formData.images.filter(img => typeof img === "string");
+        fd.append("images", JSON.stringify(oldImages));
+
+        // Nouvelles images uploadées
+        formData.images
+          .filter(img => img instanceof File)
+          .forEach((file: File) => fd.append("images", file));
+
+        const res = await axios.post(
+          `${API_BASE_URL}/modifyProduct/${product.id}`, 
+          fd,
+          {
+            headers: {
+              Authorization: `Bearer ${AuthStorage.getToken()}`,
+              "Content-Type": "multipart/form-data", // obligatoire pour FormData
+            },
+          }
+        );
+
+        onSave(res.data);
+        toast.success(" Produit modifié avec succès");
+
+        onClose();
+    } catch (err) {
+        console.error("Erreur lors de la modification du produit :", err);
+        toast.error(" Erreur lors de la modification du produit");
+    } finally {
+        setSaving(false);
+    }
+    };
+
+  const publishProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPublishing(true);
 
     try {
       const fd = new FormData();
@@ -119,41 +168,30 @@ export function NewProductModal({ isOpen, onClose, onSave, categories }: NewProd
       fd.append("poids", formData.weight);
       fd.append("dimensions", formData.dimensions);
       fd.append("materiaux", formData.materials);
-      fd.append("statut", statut);
+      fd.append("statut", "en_attente"); // 👈 passe en attente de validation
 
-      formData.images.forEach((file: any) => fd.append("images", file));
+      // Images
+      const oldImages = formData.images.filter(img => typeof img === "string");
+      fd.append("images", JSON.stringify(oldImages));
+      formData.images
+        .filter(img => img instanceof File)
+        .forEach((file: File) => fd.append("images", file));
 
-      const res = await axios.post(`${API_BASE_URL}/addProduct`, fd, {
-        headers: { Authorization: `Bearer ${AuthStorage.getToken()}` },
+      const res = await axios.post(`${API_BASE_URL}/modifyProduct/${product.id}`, fd, {
+        headers: {
+          Authorization: `Bearer ${AuthStorage.getToken()}`,
+          "Content-Type": "multipart/form-data",
+        },
       });
 
       onSave(res.data);
-      toast.success(
-        statut === "brouillon"
-          ? "Produit sauvegardé en brouillon"
-          : "Produit soumis, en attente de validation"
-      );
-
-      // Reset du formulaire
-      setFormData({
-        name: "",
-        description: "",
-        price: "",
-        stock: "",
-        category: "",
-        images: [],
-        tags: "",
-        weight: "",
-        dimensions: "",
-        materials: ""
-      });
+      toast.success("Produit publié avec succès 🎉");
       onClose();
     } catch (err) {
-      console.error("Erreur lors de la création du produit :", err);
-      toast.error("Erreur lors de l'ajout du produit");
+      console.error("Erreur lors de la publication :", err);
+      toast.error("Erreur lors de la publication du produit");
     } finally {
-      if (statut === "brouillon") setSavingDraft(false);
-      else setPublishing(false);
+      setPublishing(false);
     }
   };
 
@@ -165,15 +203,14 @@ export function NewProductModal({ isOpen, onClose, onSave, categories }: NewProd
     formData.category &&
     formData.weight &&
     formData.dimensions &&
-    formData.materials &&
-    formData.images.length > 0;
+    formData.materials;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContentWide className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl text-[#2D8A47]">Nouveau produit</DialogTitle>
-          <DialogDescription>Ajoutez un nouveau produit à votre catalogue Tsena.mg</DialogDescription>
+          <DialogTitle className="text-2xl text-[#2D8A47]">Modifier le produit</DialogTitle>
+          <DialogDescription>Modifier le produit dans votre catalogue Tsena.mg</DialogDescription>
         </DialogHeader>
 
         <form className="space-y-6 mt-4">
@@ -215,12 +252,12 @@ export function NewProductModal({ isOpen, onClose, onSave, categories }: NewProd
                   <SelectTrigger><SelectValue placeholder="Sélectionnez une catégorie" /></SelectTrigger>
                   <SelectContent>
                     {categories.length > 0 ? (
-                        categories.map((category) => (
-                          <SelectItem key={category.id} value={category.id}>{category.nom}</SelectItem>
-                        ))
-                      ) : (
-                        <p className="text-sm text-gray-400 px-2">Aucune catégorie</p>
-                      )}
+                      categories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>{category.nom}</SelectItem>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-400 px-2">Aucune catégorie</p>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -258,25 +295,20 @@ export function NewProductModal({ isOpen, onClose, onSave, categories }: NewProd
                       </div>
                       <p className="text-xs text-gray-500">PNG, JPG jusqu'à 5MB chacune (max. 5 images)</p>
                     </div>
-                    {formData.images.length === 0 && (
-                      <p className="text-red-500 text-sm mt-1">
-                        ⚠️ Ajoutez au moins une image pour pouvoir publier le produit.
-                      </p>
-                    )}
                   </CardContent>
                 </Card>
 
-                  {formData.images.map((image, index) => {
-                    const src = typeof image === "string" ? image : URL.createObjectURL(image);
-                    return (
-                      <div key={index} className="relative">
-                        <img src={src} alt={`Produit ${index + 1}`} className="w-full h-20 object-cover rounded border" />
-                        <button type="button" onClick={() => removeImage(index)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600">
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    );
-                  })}                
+                {formData.images.map((image, index) => {
+                  const src = typeof image === "string" ? image : URL.createObjectURL(image);
+                  return (
+                    <div key={index} className="relative">
+                      <img src={src} alt={`Produit ${index + 1}`} className="w-full h-20 object-cover rounded border" />
+                      <button type="button" onClick={() => removeImage(index)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -300,24 +332,67 @@ export function NewProductModal({ isOpen, onClose, onSave, categories }: NewProd
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3 justify-center pt-6 border-t">
             <Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
-            <Button type="button" variant="outline"
-              onClick={(e: any) => handleSubmit(e as any, "brouillon")}  disabled={!isFormValid || savingDraft || publishing}>
-              {savingDraft ? (
-                <svg className="animate-spin h-5 w-5 mr-2 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 018 8h-4l3 3-3 3h4a8 8 0 01-8 8v-4l-3 3 3 3v-4a8 8 0 01-8-8z"></path>
-                </svg>
-              ) : "Sauvegarder en brouillon"}
+            <Button type="submit" className="bg-[#2D8A47] hover:bg-[#245A35]"
+              onClick={(e: any) => savechange(e as any)}>
+              {saving ? (
+                <>
+                  <svg
+                    className="animate-spin h-5 w-5 mr-2 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 018 8h-4l3 3-3 3h4a8 8 0 01-8 8v-4l-3 3 3 3v-4a8 8 0 01-8-8z"
+                    ></path>
+                  </svg>
+                  Envoi en cours...
+                </>
+              ) : (
+                "Enregistrer le produit"
+              )}
             </Button>
-            <Button type="submit" className="bg-[#2D8A47] hover:bg-[#245A35]" disabled={!isFormValid || savingDraft || publishing}
-              onClick={(e: any) => handleSubmit(e as any, "en_attente")}>
-              {publishing ? (
-                <svg className="animate-spin h-5 w-5 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 018 8h-4l3 3-3 3h4a8 8 0 01-8 8v-4l-3 3 3 3v-4a8 8 0 01-8-8z"></path>
-                </svg>
-              ) : "Publier le produit"}
-            </Button>
+
+            {formData.status === "brouillon" && (
+              <Button
+                type="button"
+                variant="outline"
+                className="border-[#2D8A47] text-[#2D8A47] transition-all duration-200 hover:text-[#256d3b] hover:shadow-md active:text-[#3EBE64]"
+                onClick={(e: any) => publishProduct(e as any)}
+                disabled={ saving || publishing}
+              >
+                {publishing ? (
+                  <>
+                    <svg
+                      className="animate-spin h-5 w-5 mr-2 text-[#2D8A47]"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 018 8h-4l3 3-3 3h4a8 8 0 01-8 8v-4l-3 3 3 3v-4a8 8 0 01-8-8z"
+                      ></path>
+                    </svg>
+                    Publication en cours...
+                  </>
+                ) : (
+                  "Publier le produit"
+                )}
+              </Button>
+            )}
           </div>
         </form>
       </DialogContentWide>

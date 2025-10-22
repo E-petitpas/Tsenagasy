@@ -60,7 +60,7 @@ export default function Home({
   };
 
   const navigateToVendorDashboard = () => {
-    if (currentUser?.type === 'vendor') {
+    if (currentUser?.role === 'vendor') {
       navigate('/vendor');
     } else {
       toast.error('Connexion vendeur requise', {
@@ -71,7 +71,7 @@ export default function Home({
   };
 
   const navigateToClientDashboard = () => {
-    if (currentUser?.type === 'client') {
+    if (currentUser?.role === 'client') {
       navigate('/client');
     } else {
       toast.error('Connexion client requise', {
@@ -125,9 +125,9 @@ export default function Home({
     onLogin(user);
     
     // Redirect users to their respective dashboard after login
-    if (user.type === 'vendor') {
+    if (user.role === 'vendor') {
       navigate('/vendor');
-    } else if (user.type === 'client') {
+    } else if (user.role === 'client') {
       navigate('/client');
     }
   };
@@ -292,7 +292,7 @@ export default function Home({
         onNavigationClick={handleNavigationClick}
         onProfileClick={() => {
           if (currentUser) {
-            if (currentUser.type === 'vendor') {
+            if (currentUser.role === 'vendor') {
               navigateToVendorDashboard();
             } else {
               navigateToClientDashboard();
@@ -312,7 +312,7 @@ export default function Home({
         {/* Hero Banner */}
         <PromoBanner 
           currentUser={currentUser}
-          onLogin={() => setIsAuthModalOpen(true)} 
+          onLogin={handleLoginSuccess} 
         />
 
         {/* Popular Products */}

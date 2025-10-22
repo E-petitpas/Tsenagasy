@@ -1,8 +1,11 @@
 // back/server.ts
+import dotenv from "dotenv";
+dotenv.config();
 
 import express from "express";
 import cors from "cors";
 import routes from "./src/routes/routes";
+import path from "path";
 
 const app = express();
 
@@ -16,6 +19,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes 
 app.use('/api', routes);
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 const PORT = process.env.PORT || 5000;
 

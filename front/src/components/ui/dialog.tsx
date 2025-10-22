@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import * as DialogPrimitive from "@radix-ui/react-dialog@1.1.6";
-import { XIcon } from "lucide-react@0.487.0";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { XIcon } from "lucide-react";
 
 import { cn } from "./utils";
 
@@ -82,7 +82,7 @@ const DialogHeader = React.forwardRef<
   <div
     ref={ref}
     data-slot="dialog-header"
-    className={cn("flex flex-col gap-2 text-center sm:text-left", className)}
+    className={cn("flex flex-col gap-2 text-center", className)}
     {...props}
   />
 ));
@@ -96,9 +96,10 @@ const DialogFooter = React.forwardRef<
     ref={ref}
     data-slot="dialog-footer"
     className={cn(
-      "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+      "flex flex-col-reverse gap-2 sm:flex-row sm:justify-center",
       className,
     )}
+
     {...props}
   />
 ));
@@ -129,6 +130,30 @@ const DialogDescription = React.forwardRef<
   />
 ));
 DialogDescription.displayName = DialogPrimitive.Description.displayName;
+
+export const DialogContentWide = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
+>(({ className, children, ...props }, ref) => (
+  <DialogPrimitive.Portal>
+    <DialogPrimitive.Overlay className="fixed inset-0 bg-black/50" />
+    <DialogPrimitive.Content
+      ref={ref}
+      className={cn(
+        "fixed left-[50%] top-[50%] w-full max-w-4xl max-h-[80vh] translate-x-[-50%] translate-y-[-50%] rounded-md bg-white p-6 shadow-lg overflow-y-auto",
+        className
+      )}
+      {...props}
+    >
+      {children}
+      <DialogPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4">
+        <XIcon />
+        <span className="sr-only">Close</span>
+      </DialogPrimitive.Close>
+    </DialogPrimitive.Content>
+  </DialogPrimitive.Portal>
+))
+DialogContentWide.displayName = "DialogContentWide"
 
 export {
   Dialog,

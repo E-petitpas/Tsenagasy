@@ -28,14 +28,8 @@ interface ClientFormData {
 }
 
 interface ApiSignupResponse {
-  supabaseSession?: {
-    access_token: string
-    refresh_token: string
-    expires_in: number
-    token_type: string
-  }
+  token?: string; 
   utilisateur?: { id?: string; email?: string; nom?: string; role?: string }
-  user?: { id?: string }
   message?: string
 }
 
@@ -103,6 +97,14 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
     setForgotErrors({});
   };
 
+  const isRegisterFormFilled =
+    clientData.name.trim() &&
+    clientData.email.trim() &&
+    clientData.password.trim() &&
+    clientData.confirmPassword.trim() &&
+    clientData.phone.trim() &&
+    clientData.location.trim();
+  
   useEffect(() => {
     resetForms();
     resetAllErrors();
@@ -152,8 +154,8 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
       const data = response.data;
       const loggedUser: UserData = {
         name: data.utilisateur?.nom ,
-        type: (data.utilisateur?.role ) as UserData["type"],
-        accessToken: data.supabaseSession?.access_token,
+        role: (data.utilisateur?.role ) as UserData["role"],
+        accessToken: data.token,
         id: data.utilisateur?.id || "",
         email: data.utilisateur?.email,
       };
@@ -181,9 +183,12 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
 
   // Inscription
  const handleClientSignup = async (e: React.FormEvent<HTMLFormElement>) => {
-   e.preventDefault();
-  if (isSubmitting) return; // évite double clic rapide
-  setIsSubmitting(true);
+  e.preventDefault();
+
+  if (isSubmitting) return;
+  if (!isRegisterFormFilled) {
+    return;
+  }
 
   const newErrors: { [key: string]: string } = {};
 
@@ -216,9 +221,12 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
 
   if (Object.keys(newErrors).length > 0) {
     setRegisterErrors(newErrors);
+    setIsSubmitting(false);
     return;
   }
 
+  setRegisterErrors({});
+  setIsSubmitting(true);
   // Si pas d’erreurs → on envoie
   try {
     const payload = {
@@ -240,12 +248,12 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
 
     // ✨ Sauvegarde aussi en storage
     const newUser: UserData = {
-      name: clientData.name,
-      type: "client",
-      accessToken: data.supabaseSession?.access_token,
-      id: data.utilisateur?.id || data.user?.id || "",
-      email: clientData.email.toLowerCase().trim()
-    };
+    name: clientData.name,
+    role: "client",
+    accessToken: data.token,   
+    id: data.utilisateur?.id || "",
+    email: clientData.email.toLowerCase().trim()
+  };
 
     AuthStorage.saveUser(newUser);  
     onLogin(newUser);   
@@ -546,7 +554,11 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
                 )}
               </div>
 
-              <Button type="submit" className="w-full bg-[#2D8A47] hover:bg-[#245A35]">
+              <Button
+                type="submit"
+                className="w-full bg-[#2D8A47] hover:bg-[#245A35] disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!isRegisterFormFilled || isSubmitting }
+              >
                 {isSubmitting ? (
                   <>
                     <svg

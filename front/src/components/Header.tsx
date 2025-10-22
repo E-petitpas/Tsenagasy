@@ -126,7 +126,7 @@ export function Header({ cartItemCount = 0, onLoginClick, onCartClick, onProfile
                 </Avatar>
                 <div className="hidden md:block">
                   <p className="text-sm">{currentUser.name}</p>
-                  <p className="text-xs text-gray-500 capitalize">{currentUser.type}</p>
+                  <p className="text-xs text-gray-500 capitalize">{currentUser.role}</p>
                 </div>
               </div>
             ) : (

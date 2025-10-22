@@ -2,7 +2,7 @@ export type UserRole = 'client' | 'vendor' | 'admin' | 'customerSupport';
 
 export interface UserData {
   name: string;
-  type: UserRole;
+  role: UserRole;
   accessToken?: string;
   id?: string;
   email?: string;

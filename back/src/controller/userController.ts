@@ -18,75 +18,81 @@ const roleMapper = (role: string): string => {
   }
 }
 
-/**
- * ============================
- * Signup (création utilisateur)
- * ============================
- */
+// création user
 export const addClient = async (req: Request, res: Response) => {
   try {
-    const { email, nom, tel, adresse, role, motDePasse } = req.body as {
-      email?: string
-      nom?: string
-      tel?: string
-      adresse?: string
-      role?: string
-      motDePasse?: string
+    const { email, nom, tel, adresse, role, motDePasse, type, nomEntreprise } = req.body
+    console.log("Payload reçu:", req.body);
+    if (!email || !motDePasse || !role || !nom || !tel || !adresse) {
+      return res.status(400).json({ message: "Nom, email, téléphone, adresse, rôle et mot de passe sont requis" })
     }
 
-    if (!email || !role || !motDePasse) {
-      return res.status(400).json({ message: 'Email, rôle et mot de passe requis' })
+    if (role === "commercant" && (!type || !nomEntreprise)) {
+      return res.status(400).json({ message: "Un commerçant doit fournir un type et un nomEntreprise" })
     }
 
-    // Vérifier si déjà existant côté Prisma
+    // Vérifier doublon
     const existing = await prisma.utilisateur.findUnique({ where: { email } })
-    if (existing) return res.status(409).json({ message: 'Utilisateur déjà existant' })
+    if (existing) return res.status(409).json({ message: "Utilisateur déjà existant" })
 
-    // 1. Créer l’utilisateur dans Supabase Auth
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password: motDePasse
-    })
+    // Création dans Supabase Auth
+    const { data, error } = await supabase.auth.signUp({ email, password: motDePasse })
+    
     if (error) return res.status(400).json({ message: error.message })
     const supabaseId = data.user?.id
-    if (!supabaseId) return res.status(500).json({ message: 'Erreur Supabase: pas de supabaseId' })
+    if (!supabaseId) return res.status(500).json({ message: "Erreur Supabase: pas de supabaseId" })
 
-    // 2. Créer dans Prisma
+    // Création Prisma
     const utilisateur = await prisma.utilisateur.create({
-      data: { supabaseId, email, nom: nom ?? null, tel: tel ?? null, adresse: adresse ?? null }
+      data: { supabaseId, email, nom, tel, adresse, createdAt: new Date() }
     })
 
-    // 3. Lier au rôle spécifique
-    switch (role) {
-      case 'superAdmin':
-        await prisma.superAdmin.create({ data: { utilisateurId: utilisateur.id } })
-        break
-      case 'relationClient':
-        await prisma.relationClient.create({ data: { utilisateurId: utilisateur.id } })
-        break
-      case 'acheteur':
-        await prisma.acheteur.create({ data: { utilisateurId: utilisateur.id } })
-        break
-      case 'commercant':
-        await prisma.commercant.create({ data: { utilisateurId: utilisateur.id } })
-        break
+    let roleId: string | null = null;
+
+    // Associer rôle
+     switch (role) {
+      case "superAdmin": {
+        const created = await prisma.superAdmin.create({ data: { utilisateurId: utilisateur.id } });
+        roleId = created.id;
+        break;
+      }
+      case "relationClient": {
+        const created = await prisma.relationClient.create({ data: { utilisateurId: utilisateur.id } });
+        roleId = created.id;
+        break;
+      }
+      case "acheteur": {
+        const created = await prisma.acheteur.create({ data: { utilisateurId: utilisateur.id } });
+        roleId = created.id;
+        break;
+      }
+      case "commercant": {
+        const created = await prisma.commercant.create({ 
+          data: { utilisateurId: utilisateur.id, type, nomEntreprise } 
+        });
+        roleId = created.id;
+        break;
+      }
       default:
-        return res.status(400).json({ message: 'Rôle invalide' })
+        return res.status(400).json({ message: "Rôle invalide" });
     }
 
-    // 4. Générer un JWT maison si tu veux unifier ton API
+
     const normalizedRole = roleMapper(role)
-    const token = jwt.sign({ utilisateurId: utilisateur.id, role: normalizedRole }, JWT_SECRET, { expiresIn: '1d' })
 
     return res.status(201).json({
-      message: 'Utilisateur créé avec succès',
-      supabaseSession: data.session, // ajoute ça !
-      utilisateur: { id: utilisateur.id, email: utilisateur.email, nom: utilisateur.nom, role: normalizedRole }
+      message: "Utilisateur créé avec succès",
+      token: data.session?.access_token, // identique à login
+      utilisateur: {
+        id: roleId,
+        email: utilisateur.email,
+        nom: utilisateur.nom,
+        role: normalizedRole
+      }
     })
-
-  } catch (error: unknown) {
-    console.error(error)
-    return res.status(500).json({ message: 'Erreur serveur', error: error instanceof Error ? error.message : error })
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Erreur interne du serveur" });
   }
 }
 
@@ -117,27 +123,44 @@ export const login = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Utilisateur non trouvé dans Prisma' })
     }
 
+    await prisma.utilisateur.update({
+      where: { id: utilisateur.id },
+      data: { lastLogin: new Date() }
+    })
+
     // 3. Déterminer le rôle
-    let role: string | null = null
-    if (utilisateur.superAdmin) role = 'superAdmin'
-    else if (utilisateur.relationClient) role = 'relationClient'
-    else if (utilisateur.acheteur) role = 'acheteur'
-    else if (utilisateur.commercant) role = 'commercant'
+    let role: string | null = null;
+    let roleId: string | null = null;
 
-    if (!role) return res.status(403).json({ message: 'Rôle introuvable' })
+   if (utilisateur.superAdmin) {
+      role = 'superAdmin';
+      roleId = utilisateur.superAdmin.id;
+    } else if (utilisateur.relationClient) {
+      role = 'relationClient';
+      roleId = utilisateur.relationClient.id;
+    } else if (utilisateur.acheteur) {
+      role = 'acheteur';
+      roleId = utilisateur.acheteur.id;
+    } else if (utilisateur.commercant) {
+      role = 'commercant';
+      roleId = utilisateur.commercant.id;
+    }
 
-    const normalizedRole = roleMapper(role)
+    if (!role || !roleId) return res.status(403).json({ message: 'Rôle introuvable' });
+
+    const normalizedRole = roleMapper(role);
+
 
     return res.json({
       message: 'Connexion réussie',
-      supabaseSession: data.session, // access_token + refresh_token
+      token: data.session?.access_token, 
       utilisateur: {
-        id: utilisateur.id,
+        id: roleId,
         email: utilisateur.email,
         nom: utilisateur.nom,
         role: normalizedRole
       }
-    })
+    });
   } catch (error) {
     console.error('Erreur login:', error)
     return res.status(500).json({ message: 'Erreur serveur', error })
@@ -204,4 +227,55 @@ export const resetPassword = async (req: Request, res: Response) => {
     });
   }
 };
+
+// Récupérer tous les utilisateurs avec rôle
+export const getAllUsers = async (req: Request, res: Response) => {
+  try {
+    const users = await prisma.utilisateur.findMany({
+      include: {
+        acheteur: true,
+        commercant: true,
+        relationClient: true,
+        superAdmin: true
+      }
+    });
+
+    const formattedUsers = users.map(u => {
+      let role = 'client';
+      let roleId: string | null = null;
+
+      if (u.superAdmin) {
+        role = 'admin';
+        roleId = u.superAdmin.id;
+      } else if (u.relationClient) {
+        role = 'customerSupport';
+        roleId = u.relationClient.id;
+      } else if (u.commercant) {
+        role = 'vendor';
+        roleId = u.commercant.id;
+      } else if (u.acheteur) {
+        role = 'client';
+        roleId = u.acheteur.id;
+      }
+
+      return {
+        id: u.id,          // L’ID global de l’utilisateur
+        roleId,            // L’ID du rôle spécifique
+        nom: u.nom,
+        email: u.email,
+        tel: u.tel,
+        adresse: u.adresse,
+        role,
+        createdAt: u.createdAt,
+        lastLogin: u.lastLogin
+      };
+    });
+
+    return res.json({ users: formattedUsers });
+  } catch (error) {
+    console.error('Erreur getAllUsers:', error);
+    return res.status(500).json({ message: 'Erreur serveur', error });
+  }
+};
+
 
