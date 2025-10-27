@@ -10,7 +10,7 @@ import path from "path";
 export const getCategories = async (req: Request, res: Response) => {
   try {
     const categories = await prisma.categorie.findMany({
-      select: { id: true, nom: true }
+      select: { id: true, nomCat: true }
     });
 
     return res.status(200).json(categories);
@@ -30,16 +30,22 @@ export const createProduct = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Champs obligatoires manquants" });
     }
 
-    const commercant = await prisma.commercant.findUnique({
+    const commercant = await prisma.utilisateur.findUnique({
       where: { id: commercantId },
-      select: { nomEntreprise: true },
+      include: { magasins: true }
     });
 
     if (!commercant) {
       return res.status(404).json({ error: "Commerçant introuvable" });
     }
 
-    const nomEntreprise = commercant.nomEntreprise
+    if (!commercant.magasins || commercant.magasins.length === 0) {
+      return res.status(400).json({ error: "Le vendeur n'a pas de magasin" });
+    }
+
+    const magasin = commercant.magasins[0];
+    const magasinId = magasin.id_magasin;
+    const nomEntreprise = magasin.nom_Magasin
       .replace(/\s+/g, "_")
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
@@ -98,10 +104,10 @@ export const createProduct = async (req: Request, res: Response) => {
         prix: parseFloat(prix),
         stock: parseInt(stock),
         categorieId,
-        commercantId,
+        magasinId,
         images: imageUrls,
         tags: tags ? tags.split(",") : [],
-        description,
+        descriptions: description,
         poids: parseInt(poids),
         dimensions,
         materiaux,
@@ -127,16 +133,20 @@ export const getProductsByCommercant = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "ID du commerçant requis" });
     }
 
-    const commercant = await prisma.commercant.findUnique({
+    const commercant = await prisma.utilisateur.findUnique({
       where: { id: commercantId },
+      include: { magasins: true },
     });
 
     if (!commercant) {
       return res.status(404).json({ error: "Commerçant introuvable" });
     }
 
+    const magasinId = commercant.magasins[0].id_magasin;
+
+    // Récupération des produits liés à ce magasin
     const produits = await prisma.produit.findMany({
-      where: { commercantId },
+      where: { magasinId },
       orderBy: { createdAt: "asc" },
     });
 
@@ -153,12 +163,11 @@ export const getProductsByCommercant = async (req: Request, res: Response) => {
       category: p.categorieId,
       images: p.images,
       tags: p.tags,
-      description: p.description,
+      description: p.descriptions,
       weight: p.poids,
       dimensions: p.dimensions,
       materials: p.materiaux,
       status: p.statut,
-      commercantId: p.commercantId,
       createdAt: p.createdAt
     }));
 
@@ -173,15 +182,12 @@ export const getProductsByCommercant = async (req: Request, res: Response) => {
 export const deleteProduct = async (req: Request, res: Response) => {
   try {
     const { productId } = req.params;
-    const { imageUrl } = req.body;
     console.log(productId)
-    console.log(imageUrl)
 
     if (!productId) {
       return res.status(400).json({ error: "ID du produit requis" });
     }
 
-    // Vérifier si le produit existe
     const produit = await prisma.produit.findUnique({
       where: { id: productId },
     });
@@ -190,7 +196,6 @@ export const deleteProduct = async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Produit introuvable" });
     }
 
-    // Vérifier que Supabase est initialisé
     if (!supabaseAdmin) {
       return res.status(500).json({ error: "Supabase non initialisé" });
     }
@@ -247,6 +252,11 @@ export const updateProduct = async (req: Request, res: Response) => {
     // Vérifier si le produit existe
     const produit = await prisma.produit.findUnique({
       where: { id: productId },
+      include: {
+        magasin: {
+          include: { proprietaire: true }, // pour accéder au commerçant directement
+        },
+      },
     });
 
     if (!produit) return res.status(404).json({ error: "Produit introuvable." });
@@ -275,13 +285,11 @@ export const updateProduct = async (req: Request, res: Response) => {
     const newImageUrls: string[] = [];
 
     if (uploadedFiles && uploadedFiles.length > 0) {
-      const commercant = await prisma.commercant.findUnique({
-        where: { id: produit.commercantId },
-      });
+      const commercant = produit.magasin.proprietaire;
 
       if (!commercant) return res.status(404).json({ error: "Commerçant introuvable" });
 
-      const nomEntreprise = commercant.nomEntreprise
+      const nomMagasin = produit.magasin.nom_Magasin
         .replace(/\s+/g, "_")
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "");
@@ -297,7 +305,7 @@ export const updateProduct = async (req: Request, res: Response) => {
           .replace(/[^a-zA-Z0-9_-]/g, "");
         const uniqueId = Date.now();
         const fileName = `${cleanName}_${uniqueId}_${fileCounter}${ext}`;
-        const filePath = `${nomEntreprise}_${produit.commercantId}/${fileName}`;
+        const filePath = `${nomMagasin}_${produit.magasin.proprietaire.id}/${fileName}`;
 
         const { error: uploadError } = await supabaseAdmin!.storage
           .from("Produits")
@@ -348,12 +356,12 @@ export const updateProduct = async (req: Request, res: Response) => {
       category: updatedProduct.categorieId,
       images: updatedProduct.images,
       tags: updatedProduct.tags,
-      description: updatedProduct.description,
+      description: updatedProduct.descriptions,
       weight: updatedProduct.poids,
       dimensions: updatedProduct.dimensions,
       materials: updatedProduct.materiaux,
       status: updatedProduct.statut,
-      commercantId: updatedProduct.commercantId,
+      commercantId: produit.magasin.proprietaire.id,
       createdAt: updatedProduct.createdAt,
     };
 
@@ -375,7 +383,9 @@ export const searchProductsbyCommercant = async (req: Request, res: Response) =>
     if (!commercantId) return res.status(400).json({ error: "ID du commerçant requis" });
 
     // Construire la condition where
-    const whereClause: any = { commercantId };
+    const whereClause: any = {
+      magasin: { id_proprietaire: commercantId }, // filtrer par commerçant via le magasin
+    };
 
     if (status) whereClause.statut = status;
     if (categoryId) whereClause.categorieId = categoryId;
@@ -390,6 +400,7 @@ export const searchProductsbyCommercant = async (req: Request, res: Response) =>
 
     const produits = await prisma.produit.findMany({
       where: whereClause,
+      include: { magasin: true },
       orderBy: { createdAt: "asc" },
     });
 
@@ -401,12 +412,12 @@ export const searchProductsbyCommercant = async (req: Request, res: Response) =>
       category: p.categorieId,
       images: p.images,
       tags: p.tags,
-      description: p.description,
+      description: p.descriptions,
       weight: p.poids,
       dimensions: p.dimensions,
       materials: p.materiaux,
       status: p.statut,
-      commercantId: p.commercantId,
+      commercantId: p.magasin.id_proprietaire,
       createdAt: p.createdAt,
     }));
 

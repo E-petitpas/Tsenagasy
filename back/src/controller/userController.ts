@@ -44,50 +44,17 @@ export const addClient = async (req: Request, res: Response) => {
 
     // Création Prisma
     const utilisateur = await prisma.utilisateur.create({
-      data: { supabaseId, email, nom, tel, adresse, createdAt: new Date() }
-    })
-
-    let roleId: string | null = null;
-
-    // Associer rôle
-     switch (role) {
-      case "superAdmin": {
-        const created = await prisma.superAdmin.create({ data: { utilisateurId: utilisateur.id } });
-        roleId = created.id;
-        break;
-      }
-      case "relationClient": {
-        const created = await prisma.relationClient.create({ data: { utilisateurId: utilisateur.id } });
-        roleId = created.id;
-        break;
-      }
-      case "acheteur": {
-        const created = await prisma.acheteur.create({ data: { utilisateurId: utilisateur.id } });
-        roleId = created.id;
-        break;
-      }
-      case "commercant": {
-        const created = await prisma.commercant.create({ 
-          data: { utilisateurId: utilisateur.id, type, nomEntreprise } 
-        });
-        roleId = created.id;
-        break;
-      }
-      default:
-        return res.status(400).json({ message: "Rôle invalide" });
-    }
-
-
-    const normalizedRole = roleMapper(role)
+      data: { supabaseId, email, nom, tel, adresse, role: roleMapper(role), lastLogin: new Date() }
+    });
 
     return res.status(201).json({
       message: "Utilisateur créé avec succès",
       token: data.session?.access_token, // identique à login
       utilisateur: {
-        id: roleId,
+        id: utilisateur.id,
         email: utilisateur.email,
         nom: utilisateur.nom,
-        role: normalizedRole
+        role: utilisateur.role
       }
     })
   } catch (error) {
@@ -116,49 +83,27 @@ export const login = async (req: Request, res: Response) => {
 
     // 2. Récupérer l’utilisateur côté Prisma
     const utilisateur = await prisma.utilisateur.findUnique({
-      where: { email },
-      include: { acheteur: true, commercant: true, relationClient: true, superAdmin: true }
-    })
+      where: { email }
+    });
+
     if (!utilisateur) {
-      return res.status(404).json({ message: 'Utilisateur non trouvé dans Prisma' })
+      return res.status(404).json({ message: 'Utilisateur non trouvé dans Prisma' });
     }
 
+    // MAJ lastLogin
     await prisma.utilisateur.update({
       where: { id: utilisateur.id },
       data: { lastLogin: new Date() }
-    })
-
-    // 3. Déterminer le rôle
-    let role: string | null = null;
-    let roleId: string | null = null;
-
-   if (utilisateur.superAdmin) {
-      role = 'superAdmin';
-      roleId = utilisateur.superAdmin.id;
-    } else if (utilisateur.relationClient) {
-      role = 'relationClient';
-      roleId = utilisateur.relationClient.id;
-    } else if (utilisateur.acheteur) {
-      role = 'acheteur';
-      roleId = utilisateur.acheteur.id;
-    } else if (utilisateur.commercant) {
-      role = 'commercant';
-      roleId = utilisateur.commercant.id;
-    }
-
-    if (!role || !roleId) return res.status(403).json({ message: 'Rôle introuvable' });
-
-    const normalizedRole = roleMapper(role);
-
+    });
 
     return res.json({
       message: 'Connexion réussie',
       token: data.session?.access_token, 
       utilisateur: {
-        id: roleId,
+        id: utilisateur.id,
         email: utilisateur.email,
         nom: utilisateur.nom,
-        role: normalizedRole
+        role: utilisateur.role
       }
     });
   } catch (error) {
@@ -231,45 +176,24 @@ export const resetPassword = async (req: Request, res: Response) => {
 // Récupérer tous les utilisateurs avec rôle
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
+    const { adminId } = req.params;
+
     const users = await prisma.utilisateur.findMany({
-      include: {
-        acheteur: true,
-        commercant: true,
-        relationClient: true,
-        superAdmin: true
-      }
+      where: { id: { not: adminId } },
+      orderBy: { createdAt: 'desc' }
     });
 
-    const formattedUsers = users.map(u => {
-      let role = 'client';
-      let roleId: string | null = null;
-
-      if (u.superAdmin) {
-        role = 'admin';
-        roleId = u.superAdmin.id;
-      } else if (u.relationClient) {
-        role = 'customerSupport';
-        roleId = u.relationClient.id;
-      } else if (u.commercant) {
-        role = 'vendor';
-        roleId = u.commercant.id;
-      } else if (u.acheteur) {
-        role = 'client';
-        roleId = u.acheteur.id;
-      }
-
-      return {
-        id: u.id,          // L’ID global de l’utilisateur
-        roleId,            // L’ID du rôle spécifique
-        nom: u.nom,
-        email: u.email,
-        tel: u.tel,
-        adresse: u.adresse,
-        role,
-        createdAt: u.createdAt,
-        lastLogin: u.lastLogin
-      };
-    });
+    // Formater les données de retour
+    const formattedUsers = users.map(u => ({
+      id: u.id,
+      nom: u.nom,
+      email: u.email,
+      tel: u.tel,
+      adresse: u.adresse,
+      role: u.role,
+      createdAt: u.createdAt,
+      lastLogin: u.lastLogin
+    }));
 
     return res.json({ users: formattedUsers });
   } catch (error) {
@@ -278,4 +202,33 @@ export const getAllUsers = async (req: Request, res: Response) => {
   }
 };
 
+// Mettre à jour le statut d’un vendeur (Magasin)
+export const updateVendorStatus = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { statut } = req.body; // "approuve" ou "refuse"
 
+    if (!['approuve', 'refuse'].includes(statut)) {
+      return res.status(400).json({ message: "Statut invalide" });
+    }
+
+    // Récupérer le magasin associé à ce vendeur
+    const magasin = await prisma.magasin.findFirst({
+      where: { id_proprietaire: userId }
+    });
+
+    if (!magasin) {
+      return res.status(404).json({ message: "Magasin du vendeur introuvable" });
+    }
+
+    const updatedMagasin = await prisma.magasin.update({
+      where: { id_magasin: magasin.id_magasin },
+      data: { statut }
+    });
+
+    return res.json({ message: "Statut du vendeur mis à jour", magasin: updatedMagasin });
+  } catch (error) {
+    console.error("Erreur updateVendorStatus:", error);
+    return res.status(500).json({ message: "Erreur serveur", error });
+  }
+};

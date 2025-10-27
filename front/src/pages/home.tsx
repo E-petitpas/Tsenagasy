@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { AuthModal } from '../components/AuthModal';
@@ -64,18 +64,18 @@ export default function Home({
       navigate('/vendor');
     } else {
       toast.error('Connexion vendeur requise', {
-        description: 'Connectez-vous ou créez un compte vendeur pour accéder au tableau de bord'
+        description: 'Connectez-vous pour accéder à votre tableau de bord vendeur'
       });
       setIsAuthModalOpen(true);
     }
   };
-
-  const navigateToClientDashboard = () => {
-    if (currentUser?.role === 'client') {
-      navigate('/client');
+  
+  const navigateToDashboard = (role: 'client' | 'vendor' | 'admin') => {
+    if (currentUser?.role === role) {
+      navigate(`/${role}`);
     } else {
-      toast.error('Connexion client requise', {
-        description: 'Connectez-vous ou créez un compte client pour accéder à votre espace'
+      toast.error(`Connexion ${role} requise`, {
+        description: `Connectez-vous pour accéder à votre espace ${role}`
       });
       setIsAuthModalOpen(true);
     }
@@ -291,12 +291,18 @@ export default function Home({
         onSearchClick={handleSearch}
         onNavigationClick={handleNavigationClick}
         onProfileClick={() => {
-          if (currentUser) {
-            if (currentUser.role === 'vendor') {
-              navigateToVendorDashboard();
-            } else {
-              navigateToClientDashboard();
-            }
+          if (!currentUser) return;
+
+          switch (currentUser.role) {
+            case 'vendor':
+              navigateToDashboard('vendor');
+              break;
+            case 'client':
+              navigateToDashboard('client');
+              break;
+            case 'admin':
+              navigateToDashboard('admin');
+              break;
           }
         }}
         currentUser={currentUser}

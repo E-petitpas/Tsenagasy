@@ -15,17 +15,7 @@ export default function App() {
   const [cartItemCount, setCartItemCount] = useState(0);
   const [globalWalletBalance, setGlobalWalletBalance] = useState(45000);
 
-  useEffect(() => {
-    const adminUser: UserData = {
-    id: '1',
-    name: 'AdminTest',
-    email: 'admin@mail.com',
-    role: 'admin',
-    accessToken: 'fake-token',
-    };
-    setCurrentUser(adminUser);
-    setIsLoadingAuth(false);
-    
+  useEffect(() => { 
     const checkSavedAuth = () => {
       try {
         const savedUser = AuthStorage.getUser();
@@ -113,7 +103,11 @@ export default function App() {
         <Routes>
           <Route 
             path="/" 
-            element={<Home {...sharedProps} />} 
+            element={currentUser?.role === 'admin' ? (
+                  <Navigate to="/admin" replace />
+                ) : (
+                  <Home {...sharedProps} />
+                )} 
           />
           <Route 
             path="/client/*" 
@@ -132,10 +126,10 @@ export default function App() {
               }
             /> }
           <Route
-            path="/admin"
+            path="/admin/*"
             element={
               currentUser?.role === 'admin'
-                ? <AdminDashboard />
+                ? <AdminDashboard currentUser={currentUser as UserData & { type: "admin" }} onLogout={handleLogout} />
                 : <Navigate to="/" replace />
             }
           />
