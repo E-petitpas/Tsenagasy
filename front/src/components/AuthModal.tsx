@@ -151,16 +151,19 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
         motDePasse: loginData.password,
       });
 
-      const data = response.data;
+      const data = response.data; console.log(data)
       const loggedUser: UserData = {
         name: data.utilisateur?.nom ,
         role: (data.utilisateur?.role ) as UserData["role"],
         accessToken: data.token,
         id: data.utilisateur?.id || "",
         email: data.utilisateur?.email,
+        magasinId: data.utilisateur?.magasinId || null
       };
 
       AuthStorage.saveUser(loggedUser);
+
+      const user = AuthStorage.getUser();
       onLogin(loggedUser);
       handleClose();
     } catch (err) {

@@ -13,7 +13,12 @@ export const getCategories = async (req: Request, res: Response) => {
       select: { id: true, nomCat: true }
     });
 
-    return res.status(200).json(categories);
+    const result = categories.map(cat => ({
+      id: cat.id,
+      nom: cat.nomCat
+    }));
+
+    return res.status(200).json(result);
   } catch (error) {
     console.error("Erreur getCategories:", error);
     return res.status(500).json({ message: "Erreur serveur" });
@@ -25,7 +30,7 @@ export const createProduct = async (req: Request, res: Response) => {
 
   try {
     const { nom, prix, stock, categorieId, commercantId, tags, description, poids, dimensions, materiaux, statut } = req.body;
-    console.log('ato e')
+
     if ( !nom || !prix || !stock || !categorieId || !commercantId || !description || !poids || !dimensions || !materiaux || !statut) {
       return res.status(400).json({ error: "Champs obligatoires manquants" });
     }
@@ -54,48 +59,56 @@ export const createProduct = async (req: Request, res: Response) => {
     const uploadedFiles = req.files as Express.Multer.File[] | undefined;
     const imageUrls: string[] = [];
 
-    console.log("Fichiers uploadés :", uploadedFiles?.length);
-
     if (uploadedFiles && uploadedFiles.length > 0) {
-      for (let i = 0; i < uploadedFiles.length; i++) {
-        const file = uploadedFiles[i];
-        const ext = path.extname(file.originalname).toLowerCase();
-        const cleanName = nom
-          .replace(/\s+/g, "_")                 // remplace espaces par _
-          .normalize("NFD")                     // retire les accents
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-zA-Z0-9_-]/g, "");
-        const uniqueId = Date.now();
-        const fileName = `${cleanName}_${uniqueId}_${i + 1}${ext}`; // 1.png, 2.png, etc.
-        const filePath = `${nomEntreprise}_${commercantId}/${fileName}`;
+      const uploadResults = await Promise.allSettled(
+        uploadedFiles.map(async (file, i) => {
+          const ext = path.extname(file.originalname).toLowerCase();
+          const cleanName = nom
+            .replace(/\s+/g, "_")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-zA-Z0-9_-]/g, "");
+          const uniqueId = Date.now();
+          const fileName = `${cleanName}_${uniqueId}_${i + 1}${ext}`;
+          const filePath = `${nomEntreprise}_${commercantId}/${fileName}`;
 
-        console.log(` Upload du fichier : ${file.originalname} → ${filePath}`);
+          const { error: uploadError } = await supabaseAdmin!.storage
+            .from("Produits")
+            .upload(filePath, fs.createReadStream(file.path), {
+              cacheControl: "3600",
+              upsert: true,
+              contentType: file.mimetype,
+              duplex: "half" as any,
+            });
 
-        const { error: uploadError } = await supabaseAdmin!.storage
-          .from("Produits")
-          .upload(filePath, fs.createReadStream(file.path), {
-            cacheControl: "3600",
-            upsert: true,
-            contentType: file.mimetype,
-            duplex: "half" as any,
-          });
+          fs.promises.unlink(file.path); // Supprime le fichier temporaire local
 
-        if (uploadError) {
-          console.error("Erreur upload Supabase:", uploadError.message);
-          return res
-            .status(500)
-            .json({ error: "Erreur lors de l'upload de l'image" });
-        }
+          if (uploadError) throw new Error(uploadError.message);
 
-        // Get the public URL
-        const { data: publicUrlData } = supabaseAdmin!.storage
-          .from("Produits")
-          .getPublicUrl(filePath);
+          const { data: publicUrlData } = supabaseAdmin!.storage
+            .from("Produits")
+            .getPublicUrl(filePath);
 
-        imageUrls.push(publicUrlData.publicUrl);
+          return publicUrlData.publicUrl;
+        })
+      );
 
-        fs.unlinkSync(file.path); // Remove temporary local file
+      // 🔹 Récupérer seulement les uploads réussis
+      const successfulUploads = uploadResults
+        .filter(r => r.status === "fulfilled")
+        .map(r => (r as PromiseFulfilledResult<string>).value);
+
+      // 🔹 Log et gestion d’échec partiel
+      const failedCount = uploadResults.filter(r => r.status === "rejected").length;
+      if (failedCount > 0) {
+        console.warn(`⚠️ ${failedCount} image(s) non uploadée(s) correctement.`);
       }
+
+      if (successfulUploads.length === 0) {
+        return res.status(500).json({ error: "Échec total de l'upload des images" });
+      }
+
+      imageUrls.push(...successfulUploads);
     }
 
     const produit = await prisma.produit.create({
@@ -127,22 +140,11 @@ export const createProduct = async (req: Request, res: Response) => {
 
 export const getProductsByCommercant = async (req: Request, res: Response) => {
   try {
-    const { commercantId } = req.params;
+    const { magasinId } = req.params;
 
-    if (!commercantId) {
+    if (!magasinId) {
       return res.status(400).json({ error: "ID du commerçant requis" });
     }
-
-    const commercant = await prisma.utilisateur.findUnique({
-      where: { id: commercantId },
-      include: { magasins: true },
-    });
-
-    if (!commercant) {
-      return res.status(404).json({ error: "Commerçant introuvable" });
-    }
-
-    const magasinId = commercant.magasins[0].id_magasin;
 
     // Récupération des produits liés à ce magasin
     const produits = await prisma.produit.findMany({
@@ -182,7 +184,6 @@ export const getProductsByCommercant = async (req: Request, res: Response) => {
 export const deleteProduct = async (req: Request, res: Response) => {
   try {
     const { productId } = req.params;
-    console.log(productId)
 
     if (!productId) {
       return res.status(400).json({ error: "ID du produit requis" });
@@ -202,28 +203,23 @@ export const deleteProduct = async (req: Request, res: Response) => {
 
     // Supprimer les images dans Supabase
     if (produit.images && produit.images.length > 0) {
-      for (const url of produit.images) {
-        try {
-          // Extraire le chemin relatif à partir de l’URL publique
-          const filePath = url.split("/Produits/")[1];
-          console.log("🗑️ Chemin détecté :", filePath);
+      const deleteResults = await Promise.allSettled(
+        produit.images.map(async (url) => {
+          try {
+            const filePath = url.split("/Produits/")[1];
+            if (!filePath) return;
 
-          if (filePath) {
-            const { error } = await supabaseAdmin.storage
-              .from("Produits")
-              .remove([filePath]);
-
-            if (error) {
-              console.error(" Erreur suppression Supabase:", error.message);
-            } else {
-              console.log(" Image supprimée avec succès :", filePath);
-            }
-          } else {
-            console.warn(" Aucun chemin détecté pour :", url);
+            const { error } = await supabaseAdmin!.storage.from("Produits").remove([filePath]);
+            if (error) throw new Error(error.message);
+          } catch (err) {
+            console.error("Erreur suppression image :", err);
           }
-        } catch (err) {
-          console.error("Erreur suppression image :", err);
-        }
+        })
+      );
+
+      const failedCount = deleteResults.filter(r => r.status === "rejected").length;
+      if (failedCount > 0) {
+        console.warn(`⚠️ ${failedCount} image(s) n'ont pas pu être supprimée(s) du bucket Supabase.`);
       }
     }
 
@@ -254,12 +250,13 @@ export const updateProduct = async (req: Request, res: Response) => {
       where: { id: productId },
       include: {
         magasin: {
-          include: { proprietaire: true }, // pour accéder au commerçant directement
+          include: { proprietaire: true },
         },
       },
     });
 
     if (!produit) return res.status(404).json({ error: "Produit introuvable." });
+    if (!supabaseAdmin) return res.status(500).json({ error: "Supabase non initialisé." });
 
     const oldImages = produit.images || [];
 
@@ -269,14 +266,20 @@ export const updateProduct = async (req: Request, res: Response) => {
     const imagesASupprimer = oldImages.filter((img) => !imagesEnvoyees.includes(img));
 
     // 🔹 Supprimer les images retirées du front
-    for (const url of imagesASupprimer) {
-      try {
-        const filePath = url.split("/Produits/")[1];
-        if (filePath) {
-          await supabaseAdmin!.storage.from("Produits").remove([filePath]);
-        }
-      } catch (err) {
-        console.error("Erreur lors de la suppression d'image :", err);
+    if (imagesASupprimer.length > 0) {
+      const deleteResults = await Promise.allSettled(
+        imagesASupprimer.map(async (url) => {
+          const filePath = url.split("/Produits/")[1];
+          if (!filePath) return;
+
+          const { error } = await supabaseAdmin!.storage.from("Produits").remove([filePath]);
+          if (error) throw new Error(error.message);
+        })
+      );
+
+      const failedCount = deleteResults.filter(r => r.status === "rejected").length;
+      if (failedCount > 0) {
+        console.warn(`⚠️ ${failedCount} image(s) n'ont pas pu être supprimée(s) du bucket Supabase.`);
       }
     }
 
@@ -339,7 +342,7 @@ export const updateProduct = async (req: Request, res: Response) => {
         stock: parseInt(stock),
         categorieId,
         tags: tags ? tags.split(",") : [],
-        description,
+        descriptions: description,
         poids: parseInt(poids),
         dimensions,
         materiaux,

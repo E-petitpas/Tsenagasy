@@ -6,6 +6,7 @@ export interface UserData {
   accessToken?: string;
   id?: string;
   email?: string;
+  magasinId?: string;
 }
 
 const AUTH_STORAGE_KEY = 'user_auth_data';

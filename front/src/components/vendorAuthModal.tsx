@@ -125,6 +125,7 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
         accessToken: data.token,
         id: data.utilisateur?.id || "",
         email: formData.email,
+        magasinId: data.utilisateur?.magasinId || null
       };
 
       AuthStorage.saveUser(newUser);
@@ -199,7 +200,7 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
 
           {/* Nom entreprise */}
           <div className="space-y-2 mt-2">
-            <Label htmlFor="businessName">Nom de l’entreprise</Label>
+            <Label htmlFor="businessName">Nom du Magasin</Label>
             <Input id="businessName" placeholder="Ex: Boutique TsenaGasy"
               value={formData.businessName}
               onChange={(e) => handleChange("businessName", e.target.value)} />

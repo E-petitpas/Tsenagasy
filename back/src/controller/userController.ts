@@ -22,7 +22,7 @@ const roleMapper = (role: string): string => {
 export const addClient = async (req: Request, res: Response) => {
   try {
     const { email, nom, tel, adresse, role, motDePasse, type, nomEntreprise } = req.body
-    console.log("Payload reçu:", req.body);
+
     if (!email || !motDePasse || !role || !nom || !tel || !adresse) {
       return res.status(400).json({ message: "Nom, email, téléphone, adresse, rôle et mot de passe sont requis" })
     }
@@ -44,8 +44,28 @@ export const addClient = async (req: Request, res: Response) => {
 
     // Création Prisma
     const utilisateur = await prisma.utilisateur.create({
-      data: { supabaseId, email, nom, tel, adresse, role: roleMapper(role), lastLogin: new Date() }
+      data: {
+        supabaseId,
+        email,
+        nom,
+        tel,
+        adresse,
+        role: roleMapper(role),
+        lastLogin: new Date()
+      }
     });
+
+    let magasin = null;
+    if (role === "commercant") {
+      magasin = await prisma.magasin.create({
+        data: {
+          nom_Magasin: nomEntreprise,
+          statut: "en-attente",
+          id_proprietaire: utilisateur.id,
+        },
+      });
+    }
+    const idMagasin = magasin?.id_magasin || null;
 
     return res.status(201).json({
       message: "Utilisateur créé avec succès",
@@ -54,7 +74,8 @@ export const addClient = async (req: Request, res: Response) => {
         id: utilisateur.id,
         email: utilisateur.email,
         nom: utilisateur.nom,
-        role: utilisateur.role
+        role: utilisateur.role,
+        magasinId: idMagasin,
       }
     })
   } catch (error) {
@@ -83,7 +104,10 @@ export const login = async (req: Request, res: Response) => {
 
     // 2. Récupérer l’utilisateur côté Prisma
     const utilisateur = await prisma.utilisateur.findUnique({
-      where: { email }
+      where: { email },
+      include: {
+        magasins: true, 
+      },
     });
 
     if (!utilisateur) {
@@ -96,6 +120,12 @@ export const login = async (req: Request, res: Response) => {
       data: { lastLogin: new Date() }
     });
 
+    let idMagasin = null;
+    if (utilisateur.role === "vendor") { // rôle normalisé
+      // tu peux aussi filtrer uniquement les magasins valides ou actifs si besoin
+      idMagasin = utilisateur.magasins?.[0]?.id_magasin || null;
+    }
+
     return res.json({
       message: 'Connexion réussie',
       token: data.session?.access_token, 
@@ -103,7 +133,8 @@ export const login = async (req: Request, res: Response) => {
         id: utilisateur.id,
         email: utilisateur.email,
         nom: utilisateur.nom,
-        role: utilisateur.role
+        role: utilisateur.role,
+        magasinId: idMagasin,
       }
     });
   } catch (error) {

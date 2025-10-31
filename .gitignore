@@ -126,6 +126,3 @@ temp/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
-
-# Fichiers scripts locaux
-src/controller/createAdmin.ts

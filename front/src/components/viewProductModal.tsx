@@ -6,17 +6,20 @@ interface ViewProductModalProps {
   isOpen: boolean;
   onClose: () => void;
   product: any;
+  categories: { id: string; nom: string }[];
 }
 
 export const ViewProductModal: React.FC<ViewProductModalProps> = ({
   isOpen,
   onClose,
   product,
+  categories
 }) => {
   if (!product) return null;
 
+  const categoryName = categories.find(c => c.id === product.category)?.nom;
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       {/* 🔹 Modal avec border-radius et bordure visible comme dans ModifyProductModal */}
       <DialogContentWide className="max-w-3xl bg-white rounded-3xl shadow-lg px-10 py-8 border border-gray-200 overflow-y-auto" style={{ borderRadius: "8px" }}>
         
@@ -81,6 +84,11 @@ export const ViewProductModal: React.FC<ViewProductModalProps> = ({
           <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
             <span className="font-medium text-gray-900">Statut :</span>
             <span>{product.status}</span>
+          </div>
+
+          <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
+            <span className="font-medium text-gray-900">Catégorie :</span>
+            <span>{categoryName}</span>
           </div>
         </div>
       </DialogContentWide>

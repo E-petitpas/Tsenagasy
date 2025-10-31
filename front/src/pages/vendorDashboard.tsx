@@ -150,7 +150,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
 
   const fetchProducts = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/getProductbyMerchand/${currentUser.id}`);
+      const response = await axios.get(`${API_BASE_URL}/getProductbyMerchand/${currentUser.magasinId}`);
 
       const produits = response.data.produits || response.data || []; 
 
@@ -825,6 +825,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
         isOpen={isViewProductModalOpen}
         onClose={() => setIsViewProductModalOpen(false)}
         product={viewedProduct}
+        categories={categories}
       />
     </div>
   );
