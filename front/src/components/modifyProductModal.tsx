@@ -34,7 +34,14 @@ export function ModifyProductModal({ isOpen, onClose, onSave, product , categori
     weight: '',
     dimensions: '',
     materials: '',
-    status: ''
+    status: '',
+    typeProduit: '', 
+    locationDetails: {
+      typePrix: '',
+      caution: '',
+      duree_min: '',
+      lieuRecup: ''
+    }
   });
 
   const [dragActive, setDragActive] = useState(false);
@@ -56,7 +63,14 @@ export function ModifyProductModal({ isOpen, onClose, onSave, product , categori
         weight: product.weight?.toString() || '',
         dimensions: product.dimensions || '',
         materials: product.materials || '',
-        status: product.status || ''
+        status: product.status || '',
+        typeProduit: product.typeProduit || 'vente',
+        locationDetails: {
+          typePrix: product.locationDetails?.typePrix || '',
+          caution: product.locationDetails?.caution?.toString() || '',
+          duree_min: product.locationDetails?.duree_min?.toString() || '',
+          lieuRecup: product.locationDetails?.lieuRecup || ''
+        }
       });
     }
   }, [isOpen, product]);
@@ -112,13 +126,22 @@ export function ModifyProductModal({ isOpen, onClose, onSave, product , categori
         fd.append("nom", formData.name);
         fd.append("description", formData.description);
         fd.append("prix", formData.price);
-        fd.append("stock", formData.stock);
         fd.append("categorieId", formData.category);
         fd.append("commercantId", currentUser?.id || "");
         fd.append("tags", formData.tags);
-        fd.append("poids", formData.weight);
-        fd.append("dimensions", formData.dimensions);
-        fd.append("materiaux", formData.materials);
+      
+        // Champs selon type
+        if (formData.typeProduit === "location") {
+          fd.append("typePrix", formData.locationDetails.typePrix);
+          fd.append("caution", formData.locationDetails.caution);
+          fd.append("duree_min", formData.locationDetails.duree_min);
+          fd.append("lieuRecup", formData.locationDetails.lieuRecup);
+        } else {
+          fd.append("stock", formData.stock);
+          fd.append("poids", formData.weight);
+          fd.append("dimensions", formData.dimensions);
+          fd.append("materiaux", formData.materials);
+        }
 
         // Anciennes images gardées
         const oldImages = formData.images.filter(img => typeof img === "string");
@@ -161,14 +184,22 @@ export function ModifyProductModal({ isOpen, onClose, onSave, product , categori
       fd.append("nom", formData.name);
       fd.append("description", formData.description);
       fd.append("prix", formData.price);
-      fd.append("stock", formData.stock);
       fd.append("categorieId", formData.category);
       fd.append("commercantId", currentUser?.id || "");
       fd.append("tags", formData.tags);
-      fd.append("poids", formData.weight);
-      fd.append("dimensions", formData.dimensions);
-      fd.append("materiaux", formData.materials);
-      fd.append("statut", "en_attente"); // 👈 passe en attente de validation
+      fd.append("statut", "en_attente");
+
+      if (formData.typeProduit === "location") {
+        fd.append("typePrix", formData.locationDetails.typePrix);
+        fd.append("caution", formData.locationDetails.caution);
+        fd.append("duree_min", formData.locationDetails.duree_min);
+        fd.append("lieuRecup", formData.locationDetails.lieuRecup);
+      } else {
+        fd.append("stock", formData.stock);
+        fd.append("poids", formData.weight);
+        fd.append("dimensions", formData.dimensions);
+        fd.append("materiaux", formData.materials);
+      }
 
       // Images
       const oldImages = formData.images.filter(img => typeof img === "string");
@@ -199,11 +230,17 @@ export function ModifyProductModal({ isOpen, onClose, onSave, product , categori
     formData.name &&
     formData.description &&
     formData.price &&
-    formData.stock &&
     formData.category &&
-    formData.weight &&
-    formData.dimensions &&
-    formData.materials;
+    (
+      formData.typeProduit === "location"
+        ? formData.locationDetails.caution &&
+          formData.locationDetails.duree_min &&
+          formData.locationDetails.lieuRecup
+        : formData.stock &&
+          formData.weight &&
+          formData.dimensions &&
+          formData.materials
+    );
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -237,13 +274,44 @@ export function ModifyProductModal({ isOpen, onClose, onSave, product , categori
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="stock">Stock</Label>
-                  <div className="relative">
-                    <Package className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input id="stock" type="number" placeholder="10" className="pl-10" value={formData.stock} onChange={(e) => handleInputChange('stock', e.target.value)} />
+                {formData.typeProduit === "location" ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="typePrix">Type de prix</Label>
+                    <Select
+                      value={formData.locationDetails.typePrix}
+                      onValueChange={(v) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          locationDetails: { ...prev.locationDetails, typePrix: v },
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Ex: Journalier" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="journalier">Journalier</SelectItem>
+                        <SelectItem value="hebdomadaire">Hebdomadaire</SelectItem>
+                        <SelectItem value="mensuel">Mensuel</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="stock">Stock</Label>
+                    <div className="relative">
+                      <Package className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="stock"
+                        type="number"
+                        placeholder="10"
+                        className="pl-10"
+                        value={formData.stock}
+                        onChange={(e) => handleInputChange("stock", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -311,21 +379,53 @@ export function ModifyProductModal({ isOpen, onClose, onSave, product , categori
                 })}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="weight">Poids (g)</Label>
-                  <Input id="weight" type="number" placeholder="500" value={formData.weight} onChange={(e) => handleInputChange('weight', e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dimensions">Dimensions (cm)</Label>
-                  <Input id="dimensions" placeholder="30x20x10" value={formData.dimensions} onChange={(e) => handleInputChange('dimensions', e.target.value)} />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="materials">Matériaux</Label>
-                <Input id="materials" placeholder="Coton, raphia, bois de rose..." value={formData.materials} onChange={(e) => handleInputChange('materials', e.target.value)}/>
-              </div>
+              {formData.typeProduit === "location" ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="caution">Caution (Ar)</Label>
+                      <Input id="caution" type="number" placeholder="100000" value={formData.locationDetails.caution} onChange={(e) =>
+                        setFormData(prev => ({
+                          ...prev,
+                          locationDetails: { ...prev.locationDetails, caution: e.target.value }
+                        }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="duree_min">Durée min (jours)</Label>
+                      <Input id="duree_min" type="number" placeholder="1" value={formData.locationDetails.duree_min} onChange={(e) =>
+                        setFormData(prev => ({
+                          ...prev,
+                          locationDetails: { ...prev.locationDetails, duree_min: e.target.value }
+                        }))} />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lieuRecup">Lieu de récupération</Label>
+                    <Input id="lieuRecup" placeholder="Ex: Analakely - Antananarivo" value={formData.locationDetails.lieuRecup} onChange={(e) =>
+                      setFormData(prev => ({
+                        ...prev,
+                        locationDetails: { ...prev.locationDetails, lieuRecup: e.target.value }
+                      }))} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="weight">Poids (g)</Label>
+                      <Input id="weight" type="number" placeholder="500" value={formData.weight} onChange={(e) => handleInputChange('weight', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="dimensions">Dimensions (cm)</Label>
+                      <Input id="dimensions" placeholder="30x20x10" value={formData.dimensions} onChange={(e) => handleInputChange('dimensions', e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="materials">Matériaux</Label>
+                    <Input id="materials" placeholder="Coton, raphia..." value={formData.materials} onChange={(e) => handleInputChange('materials', e.target.value)} />
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

@@ -26,22 +26,32 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
     case "en_attente":
     case "en attente":
       label = "En attente";
-      bgColor = "#FACC15"; // jaune vif
-      textColor = "#92400E"; 
-      borderColor = "#FBBF24";
+      bgColor = "#FFA726"; // orange
+      textColor = "#7C2D12"; 
+      borderColor = "#EA580C";
       break;
     case "brouillon":
-      label = "Brouillon";
+    case "inactif":
+      label = normalized === "brouillon" ? "Brouillon" : "Inactif";
       bgColor = "#D1D5DB"; // gris
       textColor = "#374151";
       borderColor = "#9CA3AF";
       break;
     case "publié":
     case "publie":
-      label = "Publié";
-      bgColor = "#2D8A47" // vert vif
-      textColor = "#065F46";
-      borderColor = "#245A35";
+    case "approuvé":
+    case "approuve":
+    case "terminé":
+    case "termine":
+      label =
+        normalized === "publié" || normalized === "publie"
+          ? "Publié"
+          : normalized === "approuvé" || normalized === "approuve"
+          ? "Approuvé"
+          : "Terminé";
+      bgColor = "#5BEC90" 
+      textColor = "#14532D";
+      borderColor = "#22C55E";
       break;
     case "processing":
     case "en traitement":
@@ -50,26 +60,36 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
       textColor = "#FFFFFF";
       borderColor = "#2563EB";
       break;
-    case "shipped":
     case "expédié":
-      label = "Expédié";
+    case "livré":
+      label = normalized === "expédié" ? "Expédié" : "Livré";
       bgColor = "#9F7AEA"; // violet vif
       textColor = "#6B21A8";
       borderColor = "#8B5CF6";
       break;
-    case "completed":
-    case "terminé":
-      label = "Terminé";
-      bgColor = "#2D8A47"; // emerald vif
-      textColor = "#FFFFFF";
-      borderColor = "#245A35";
-      break;
-    case "cancelled":
+    case "refusé":
+    case "refuse":
     case "annulé":
-      label = "Annulé";
+    case "annule":
+      label =
+        normalized === "refusé" || normalized === "refuse"
+          ? "Refusé"
+          : "Annulé";
       bgColor = "#F87171"; // rouge vif
       textColor = "#7F1D1D";
       borderColor = "#EF4444";
+      break;
+    case "vente":
+      label = "Vente";
+      bgColor = "#3B82F6"; // bleu vif
+      textColor = "#FFFF";
+      borderColor = "#2563EB";
+      break;
+    case "location":
+      label = "Location";
+      bgColor = "#06B6D4"; // cyan/turquoise
+      textColor = "#FFFF";
+      borderColor = "#0891B2";
       break;
     default:
       label = status;

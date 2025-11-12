@@ -151,7 +151,8 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
         motDePasse: loginData.password,
       });
 
-      const data = response.data; console.log(data)
+      const data = response.data;
+      
       const loggedUser: UserData = {
         name: data.utilisateur?.nom ,
         role: (data.utilisateur?.role ) as UserData["role"],

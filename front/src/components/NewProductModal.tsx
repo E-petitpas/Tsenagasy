@@ -224,7 +224,7 @@ export function NewProductModal({ isOpen, onClose, onSave, categories }: NewProd
                   </SelectContent>
                 </Select>
               </div>
-
+              
               <div className="space-y-2">
                 <Label htmlFor="tags">Tags (séparés par des virgules)</Label>
                 <Input id="tags" placeholder="traditionnel, fait main, madagascar" value={formData.tags} onChange={(e) => handleInputChange('tags', e.target.value)} />
@@ -296,7 +296,7 @@ export function NewProductModal({ isOpen, onClose, onSave, categories }: NewProd
               </div>
             </div>
           </div>
-
+          
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3 justify-center pt-6 border-t">
             <Button type="button" variant="outline" onClick={onClose}>Annuler</Button>

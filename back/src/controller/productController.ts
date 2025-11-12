@@ -29,9 +29,9 @@ export const getCategories = async (req: Request, res: Response) => {
 export const createProduct = async (req: Request, res: Response) => {
 
   try {
-    const { nom, prix, stock, categorieId, commercantId, tags, description, poids, dimensions, materiaux, statut } = req.body;
+    const { nom, prix, stock, categorieId, commercantId, tags, description, poids, dimensions, materiaux, statut, type_produit } = req.body;
 
-    if ( !nom || !prix || !stock || !categorieId || !commercantId || !description || !poids || !dimensions || !materiaux || !statut) {
+    if ( !nom || !prix || !stock || !categorieId || !commercantId || !description || !poids || !dimensions || !materiaux || !statut|| !type_produit) {
       return res.status(400).json({ error: "Champs obligatoires manquants" });
     }
 
@@ -124,7 +124,7 @@ export const createProduct = async (req: Request, res: Response) => {
         poids: parseInt(poids),
         dimensions,
         materiaux,
-        statut,
+        statut
       },
     });
 
@@ -149,6 +149,9 @@ export const getProductsByCommercant = async (req: Request, res: Response) => {
     // Récupération des produits liés à ce magasin
     const produits = await prisma.produit.findMany({
       where: { magasinId },
+      include: {
+        produitLocation: true, 
+      },
       orderBy: { createdAt: "asc" },
     });
 
@@ -170,7 +173,17 @@ export const getProductsByCommercant = async (req: Request, res: Response) => {
       dimensions: p.dimensions,
       materials: p.materiaux,
       status: p.statut,
-      createdAt: p.createdAt
+      typeProduit: p.isLocation ? "location" : "vente",
+      createdAt: p.createdAt,
+      locationDetails: p.produitLocation
+        ? {
+            caution: p.produitLocation.caution,
+            duree_min: p.produitLocation.duree_min,
+            disponible: p.produitLocation.disponible,
+            typePrix: p.produitLocation.typePrix,
+            lieuRecup: p.produitLocation.lieuRecup,
+          }
+        : null,
     }));
 
     return res.status(200).json(mappedProducts);
@@ -191,6 +204,7 @@ export const deleteProduct = async (req: Request, res: Response) => {
 
     const produit = await prisma.produit.findUnique({
       where: { id: productId },
+      include: { produitLocation: true },
     });
 
     if (!produit) {
@@ -223,6 +237,14 @@ export const deleteProduct = async (req: Request, res: Response) => {
       }
     }
 
+    // 🔹 Supprimer la location associée (si c’est un produit de location)
+    if (produit.isLocation && produit.produitLocation) {
+      await prisma.produitLocation.delete({
+        where: { produitId: produit.id },
+      });
+      console.log(`ProduitLocation liée supprimée pour le produit ${produit.id}`);
+    }
+
     // Supprimer le produit en base
     await prisma.produit.delete({
       where: { id: productId },
@@ -239,9 +261,9 @@ export const deleteProduct = async (req: Request, res: Response) => {
 export const updateProduct = async (req: Request, res: Response) => {
   try {
     const { productId } = req.params;
-    const { nom, prix, stock, categorieId, tags, description, poids, dimensions, materiaux, images: imagesEnvoyeesJson, statut } = req.body;
+    const { nom, prix, stock, categorieId, tags, description, poids, dimensions, materiaux, images: imagesEnvoyeesJson, statut, typePrix, caution, duree_min, lieuRecup } = req.body;
 
-    if (!productId || !nom || !prix || !stock || !categorieId || !description || !poids || !dimensions || !materiaux) {
+    if (!productId || !nom || !prix || !categorieId || !description) {
       return res.status(400).json({ error: "Certains champs obligatoires sont manquants." });
     }
 
@@ -249,9 +271,8 @@ export const updateProduct = async (req: Request, res: Response) => {
     const produit = await prisma.produit.findUnique({
       where: { id: productId },
       include: {
-        magasin: {
-          include: { proprietaire: true },
-        },
+        magasin: { include: { proprietaire: true } },
+        produitLocation: true,
       },
     });
 
@@ -307,7 +328,8 @@ export const updateProduct = async (req: Request, res: Response) => {
           .replace(/[\u0300-\u036f]/g, "")
           .replace(/[^a-zA-Z0-9_-]/g, "");
         const uniqueId = Date.now();
-        const fileName = `${cleanName}_${uniqueId}_${fileCounter}${ext}`;
+        const suffix = produit.isLocation ? "_Location" : "";
+        const fileName = `${cleanName}_${uniqueId}${suffix}_${fileCounter}${ext}`;
         const filePath = `${nomMagasin}_${produit.magasin.proprietaire.id}/${fileName}`;
 
         const { error: uploadError } = await supabaseAdmin!.storage
@@ -339,18 +361,47 @@ export const updateProduct = async (req: Request, res: Response) => {
       data: {
         nom,
         prix: parseFloat(prix),
-        stock: parseInt(stock),
         categorieId,
         tags: tags ? tags.split(",") : [],
         descriptions: description,
-        poids: parseInt(poids),
-        dimensions,
-        materiaux,
         images: finalImages,
         ...(statut && { statut }),
+        ...(produit.isLocation
+          ? {
+              // Pour les locations, pas besoin des champs physiques
+              stock: 1,
+              poids: 0,
+              dimensions: "",
+              materiaux: "",
+            }
+          : {
+              // Pour les ventes
+              stock: parseInt(stock || "0"),
+              poids: parseInt(poids || "0"),
+              dimensions,
+              materiaux,
+            }),
       },
     });
 
+    // --- 🔸 Mise à jour produitLocation si location ---
+    if (produit.isLocation && produit.produitLocation) {
+      await prisma.produitLocation.update({
+        where: { produitId: produit.id },
+        data: {
+          ...(typePrix && { typePrix }),
+          ...(caution && { caution: parseFloat(caution) }),
+          ...(duree_min && { duree_min: parseInt(duree_min) }),
+          ...(lieuRecup && { lieuRecup }),
+        },
+      });
+    }
+
+    const updatedLocation = produit.isLocation
+      ? await prisma.produitLocation.findUnique({ where: { produitId: produit.id } })
+      : null;
+    
+    
     const mappedProduct = {
       id: updatedProduct.id,
       name: updatedProduct.nom,
@@ -366,6 +417,15 @@ export const updateProduct = async (req: Request, res: Response) => {
       status: updatedProduct.statut,
       commercantId: produit.magasin.proprietaire.id,
       createdAt: updatedProduct.createdAt,
+      locationDetails: updatedLocation
+        ? {
+            caution: updatedLocation.caution,
+            duree_min: updatedLocation.duree_min,
+            disponible: updatedLocation.disponible,
+            typePrix: updatedLocation.typePrix,
+            lieuRecup: updatedLocation.lieuRecup,
+          }
+        : null,
     };
 
     return res.status(200).json({
@@ -381,7 +441,7 @@ export const updateProduct = async (req: Request, res: Response) => {
 export const searchProductsbyCommercant = async (req: Request, res: Response) => {
   try {
     const { commercantId } = req.params;
-    const { status, categoryId, query } = req.body; 
+    const { status, categoryId, query, isLocation } = req.body; 
 
     if (!commercantId) return res.status(400).json({ error: "ID du commerçant requis" });
 
@@ -392,6 +452,7 @@ export const searchProductsbyCommercant = async (req: Request, res: Response) =>
 
     if (status) whereClause.statut = status;
     if (categoryId) whereClause.categorieId = categoryId;
+    if (typeof isLocation === "boolean") whereClause.isLocation = isLocation;
 
     if (query) {
       whereClause.OR = [
@@ -403,7 +464,7 @@ export const searchProductsbyCommercant = async (req: Request, res: Response) =>
 
     const produits = await prisma.produit.findMany({
       where: whereClause,
-      include: { magasin: true },
+      include: { magasin: true, produitLocation: true },
       orderBy: { createdAt: "asc" },
     });
 
@@ -422,11 +483,148 @@ export const searchProductsbyCommercant = async (req: Request, res: Response) =>
       status: p.statut,
       commercantId: p.magasin.id_proprietaire,
       createdAt: p.createdAt,
+      typeProduit: p.isLocation ? "location" : "vente",
+      locationDetails: p.produitLocation
+        ? {
+            caution: p.produitLocation.caution,
+            duree_min: p.produitLocation.duree_min,
+            disponible: p.produitLocation.disponible,
+            typePrix: p.produitLocation.typePrix,
+            lieuRecup: p.produitLocation.lieuRecup,
+          }
+        : null,
     }));
 
     return res.status(200).json(mappedProducts);
   } catch (error) {
     console.error("Erreur searchProducts:", error);
     return res.status(500).json({ error: "Erreur lors de la recherche de produits" });
+  }
+};
+
+
+export const createLocation = async (req: Request, res: Response) => {
+
+  try {
+    const { nom, prix, categorieId, commercantId, tags, description, statut, caution, duree_min, lieuRecup, typePrix } = req.body;
+
+    if ( !nom || !prix || !categorieId || !tags || !commercantId || !description || !statut || !caution || !duree_min || !lieuRecup|| !typePrix ) {
+      return res.status(400).json({ error: "Champs obligatoires manquants" });
+    }
+
+    const commercant = await prisma.utilisateur.findUnique({
+      where: { id: commercantId },
+      include: { magasins: true }
+    });
+
+    if (!commercant) {
+      return res.status(404).json({ error: "Commerçant introuvable" });
+    }
+
+    if (!commercant.magasins || commercant.magasins.length === 0) {
+      return res.status(400).json({ error: "Le vendeur n'a pas de magasin" });
+    }
+
+    const magasin = commercant.magasins[0];
+    const magasinId = magasin.id_magasin;
+    const nomEntreprise = magasin.nom_Magasin
+      .replace(/\s+/g, "_")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    
+    // envoie de l'img dans supabase
+    const uploadedFiles = req.files as Express.Multer.File[] | undefined;
+    const imageUrls: string[] = [];
+
+    if (uploadedFiles && uploadedFiles.length > 0) {
+      const uploadResults = await Promise.allSettled(
+        uploadedFiles.map(async (file, i) => {
+          const ext = path.extname(file.originalname).toLowerCase();
+          const cleanName = nom
+            .replace(/\s+/g, "_")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-zA-Z0-9_-]/g, "");
+          const uniqueId = Date.now();
+          const fileName = `${cleanName}_${uniqueId}_Location${i + 1}${ext}`;
+          const filePath = `${nomEntreprise}_${commercantId}/${fileName}`;
+
+          const { error: uploadError } = await supabaseAdmin!.storage
+            .from("Produits")
+            .upload(filePath, fs.createReadStream(file.path), {
+              cacheControl: "3600",
+              upsert: true,
+              contentType: file.mimetype,
+              duplex: "half" as any,
+            });
+
+          fs.promises.unlink(file.path); // Supprime le fichier temporaire local
+
+          if (uploadError) throw new Error(uploadError.message);
+
+          const { data: publicUrlData } = supabaseAdmin!.storage
+            .from("Produits")
+            .getPublicUrl(filePath);
+
+          return publicUrlData.publicUrl;
+        })
+      );
+
+      // 🔹 Récupérer seulement les uploads réussis
+      const successfulUploads = uploadResults
+        .filter(r => r.status === "fulfilled")
+        .map(r => (r as PromiseFulfilledResult<string>).value);
+
+      // 🔹 Log et gestion d’échec partiel
+      const failedCount = uploadResults.filter(r => r.status === "rejected").length;
+      if (failedCount > 0) {
+        console.warn(`⚠️ ${failedCount} image(s) non uploadée(s) correctement.`);
+      }
+
+      if (successfulUploads.length === 0) {
+        return res.status(500).json({ error: "Échec total de l'upload des images" });
+      }
+
+      imageUrls.push(...successfulUploads);
+    }
+
+    // --- Création du produit principal ---
+    const produit = await prisma.produit.create({
+      data: {
+        nom,
+        prix: parseFloat(prix),
+        stock: 1, 
+        categorieId,
+        magasinId,
+        images: imageUrls,
+        tags: tags ? tags.split(",") : [],
+        descriptions: description,
+        poids: 0,
+        dimensions: "",
+        materiaux: "",
+        statut,
+        isLocation: true, 
+      },
+    });
+
+    // --- Création du lien ProduitLocation ---
+    const location = await prisma.produitLocation.create({
+      data: {
+        produitId: produit.id,
+        caution: parseFloat(caution),
+        duree_min: parseInt(duree_min),
+        disponible: true,
+        typePrix,
+        lieuRecup,
+      },
+    });
+
+    res.status(201).json({
+      message: "Produit créé avec succès",
+      produit: { ...produit, produitLocation: location },
+    });
+  } catch (error) {
+    console.error("Erreur createProduct:", error);
+    res.status(500).json({ error: "Erreur lors de la création du produit" });
   }
 };

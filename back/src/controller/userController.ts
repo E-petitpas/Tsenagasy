@@ -21,8 +21,8 @@ const roleMapper = (role: string): string => {
 // création user
 export const addClient = async (req: Request, res: Response) => {
   try {
-    const { email, nom, tel, adresse, role, motDePasse, type, nomEntreprise } = req.body
-
+    const { email, nom, tel, adresse, role, motDePasse, type, nomEntreprise } = req.body;
+    
     if (!email || !motDePasse || !role || !nom || !tel || !adresse) {
       return res.status(400).json({ message: "Nom, email, téléphone, adresse, rôle et mot de passe sont requis" })
     }
@@ -60,8 +60,9 @@ export const addClient = async (req: Request, res: Response) => {
       magasin = await prisma.magasin.create({
         data: {
           nom_Magasin: nomEntreprise,
-          statut: "en-attente",
+          statut: "en_attente",
           id_proprietaire: utilisateur.id,
+          type: type
         },
       });
     }
@@ -204,6 +205,113 @@ export const resetPassword = async (req: Request, res: Response) => {
   }
 };
 
+export const adhesionVendor = async (req: Request, res: Response) => {
+  try {
+    const demandes = await prisma.magasin.findMany({
+      where: {
+        statut: { in: ["en_attente", "refuse"] }
+      },
+      include: {
+        proprietaire: true, 
+      }
+    });
+
+    const formatted = demandes.map(d => ({
+      idMagasin: d.id_magasin,
+      nomMagasin: d.nom_Magasin,
+      type: d.type,
+      statut: d.statut,
+      proprietaire: {
+        id: d.proprietaire.id,
+        nom: d.proprietaire.nom,
+        email: d.proprietaire.email,
+        tel: d.proprietaire.tel,
+        adresse: d.proprietaire.adresse,
+        role: d.proprietaire.role,
+        createdAt: d.proprietaire.createdAt
+      }
+    }));
+
+    const sorted = formatted.sort((a, b) => b.proprietaire.createdAt.getTime() - a.proprietaire.createdAt.getTime());
+
+    return res.json({ demandes: sorted });
+
+  } catch (error) {
+    console.error("Erreur adhesionVendor:", error);
+    return res.status(500).json({ message: "Erreur serveur", error });
+  }
+};
+
+// maj statut magasin
+export const updateVendorStatus = async (req: Request, res: Response) => {
+
+  try {
+    const { idMagasin } = req.params;
+    const { statut } = req.body; 
+
+    if (!statut) {
+      return res.status(400).json({ message: "Statut manquant" });
+    }
+
+    const updatedMagasin = await prisma.magasin.update({
+      where: { id_magasin: idMagasin },
+      data: { statut }
+    });
+
+    return res.json({ message: "Statut du magasin mis à jour", magasin: updatedMagasin });
+
+  } catch (error) {
+    console.error("Erreur updateMagasinStatus:", error);
+    return res.status(500).json({ message: "Erreur serveur", error });
+  }
+};
+
+// suppression totale d’un magasin (et éventuellement du commerçant)
+export const deleteAdhesion = async (req: Request, res: Response) => {
+  try {
+    const { idMagasin } = req.params;
+
+    if (!idMagasin) {
+      return res.status(400).json({ message: "ID du magasin manquant" });
+    }
+
+    // Vérifier si le magasin existe
+    const magasin = await prisma.magasin.findUnique({
+      where: { id_magasin: idMagasin },
+      include: { proprietaire: true },
+    });
+
+    if (!magasin) {
+      return res.status(404).json({ message: "Magasin introuvable" });
+    }
+
+    // Supprimer le magasin
+    await prisma.magasin.delete({
+      where: { id_magasin: idMagasin },
+    });
+
+    // Optionnel : supprimer aussi le commerçant associé s’il n’a plus d’autres magasins
+    const autresMagasins = await prisma.magasin.findMany({
+      where: { id_proprietaire: magasin.id_proprietaire },
+    });
+
+    if (autresMagasins.length === 0) {
+      await prisma.utilisateur.delete({
+        where: { id: magasin.id_proprietaire },
+      });
+    }
+
+    return res.json({ message: "Magasin supprimé avec succès" });
+
+  } catch (error) {
+    console.error("Erreur deleteAdhesion:", error);
+    return res.status(500).json({
+      message: "Erreur serveur lors de la suppression du magasin",
+      error: error instanceof Error ? error.message : error,
+    });
+  }
+};
+
 // Récupérer tous les utilisateurs avec rôle
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
@@ -230,36 +338,5 @@ export const getAllUsers = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Erreur getAllUsers:', error);
     return res.status(500).json({ message: 'Erreur serveur', error });
-  }
-};
-
-// Mettre à jour le statut d’un vendeur (Magasin)
-export const updateVendorStatus = async (req: Request, res: Response) => {
-  try {
-    const { userId } = req.params;
-    const { statut } = req.body; // "approuve" ou "refuse"
-
-    if (!['approuve', 'refuse'].includes(statut)) {
-      return res.status(400).json({ message: "Statut invalide" });
-    }
-
-    // Récupérer le magasin associé à ce vendeur
-    const magasin = await prisma.magasin.findFirst({
-      where: { id_proprietaire: userId }
-    });
-
-    if (!magasin) {
-      return res.status(404).json({ message: "Magasin du vendeur introuvable" });
-    }
-
-    const updatedMagasin = await prisma.magasin.update({
-      where: { id_magasin: magasin.id_magasin },
-      data: { statut }
-    });
-
-    return res.json({ message: "Statut du vendeur mis à jour", magasin: updatedMagasin });
-  } catch (error) {
-    console.error("Erreur updateVendorStatus:", error);
-    return res.status(500).json({ message: "Erreur serveur", error });
   }
 };

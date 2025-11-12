@@ -3,7 +3,11 @@ import { Users, Package, Star, BarChart3, Settings, LogOut, Plus, Search, Edit, 
 import AddUserModal from '../components/addUserModal';
 import { UserData } from '../config/authStorage';
 import { API_BASE_URL } from '../config/api';
+import { StatusBadge } from "../components/StatusBadge";
 import axios from 'axios';
+import Swal from 'sweetalert2';
+import { toast } from 'sonner';
+import '../styles/AdminDashboard.css';
 
 type TabType = 'overview' | 'accounts' | 'products' | 'sponsors' | 'analytics' | 'settings';
 
@@ -13,10 +17,14 @@ type AdminDashboardProps = {
 };
 
 export default function AdminDashboard({ currentUser, onLogout }: AdminDashboardProps) {
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [accounts, setAccounts] = useState<any[]>([]);
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<'en_attente' | 'refuse'>('en_attente');
+  const [adhesionRequests, setAdhesionRequests] = useState<any[]>([]);
+  const [showRejected, setShowRejected] = useState(false);
 
   // Données de démonstration
   const stats = {
@@ -47,33 +55,106 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
   ];
 
   useEffect(() => {
-    // Exemple de récupération depuis ton backend
-    fetchAccounts();
+    const timer = setInterval(() => setCurrentDate(new Date()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
-const fetchAccounts = async () => {
-  try {
-    const adminId = currentUser.id;
-    const res = await axios.get(`${API_BASE_URL}/getAllUser/${adminId}`);
-    const users = res.data.users.map((u: any) => ({
-      id: u.id,
-      name: u.nom,                   // correspond à "nom" du backend
-      email: u.email,
-      role: u.role,
-      statut: u.statut || 'en_attente', // utiliser ce qui vient du backend ou par défaut
-      activityStatus: u.activityStatus || 'inactif',              // temporairement, tu peux définir un statut fixe
-      joinDate: new Date(u.createdAt).toLocaleDateString(), // formate la date
-    }));
-    console.log(users);
-    users.forEach((u: any) => console.log(u.activityStatus));
-    setAccounts(users);
-    console.log(accounts)
-  } catch (error) {
-    console.error(error);
-  }
-};
+  const formatDate = (date: Date) => {
+    const options: Intl.DateTimeFormatOptions = { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' };
+    return date.toLocaleDateString('fr-FR', options);
+  };
+  
+  useEffect(() => {
+    fetchAdhesionRequests();
+    fetchAccounts();
+    const savedTab = sessionStorage.getItem('activeTab') as TabType | null;
+    if (savedTab) {
+      setActiveTab(savedTab);
+    }
+  }, []);
 
-const handleAccept = async (id: number) => {
+  useEffect(() => {
+    sessionStorage.setItem('activeTab', activeTab);
+  }, [activeTab]);
+  
+  const fetchAdhesionRequests = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/getAdhesion/vendor`);
+      setAdhesionRequests(res.data.demandes);
+    } catch (error) {
+      console.error("Erreur récupération demandes :", error);
+    }
+  };
+
+  const handleDeleteRejected = async (idMagasin: string, nomMagasin: string) => {
+
+    await Swal.fire({
+      title: `Confirmation de suppression`,
+      text: `Souhaitez-vous supprimer dénitivement le magasin "${nomMagasin}" ?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Oui, supprimer',
+      cancelButtonText: 'Annuler',
+      showLoaderOnConfirm: true,
+      allowOutsideClick: () => !Swal.isLoading(),
+      preConfirm: async () => {
+        try {
+          await axios.delete(`${API_BASE_URL}/deleteAdhesion/${idMagasin}`);
+          await fetchAdhesionRequests(); // mise à jour du tableau
+          return true;
+        } catch (error) {
+          console.error("Erreur suppression :", error);
+          Swal.showValidationMessage(`Erreur lors de la suppression`);
+          return false;
+        }
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        toast.success("Magasin supprimé avec succès !");
+      }
+    });
+  };
+
+
+  const fetchAccounts = async () => {
+    try {
+      const adminId = currentUser.id;
+      const res = await axios.get(`${API_BASE_URL}/getAllUser/${adminId}`);
+      const users = res.data.users.map((u: any) => ({
+        id: u.id,
+        name: u.nom,                
+        email: u.email,
+        role: u.role,
+        statut: u.statut || 'en_attente', 
+        activityStatus: u.activityStatus || 'inactif',              
+        joinDate: new Date(u.createdAt).toLocaleDateString(),
+      }));
+      setAccounts(users);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleAdhesionDecision = async (idMagasin: string, decision: 'approuve' | 'refuse') => {
+    try {
+      console.log('ato')
+      await axios.put(`${API_BASE_URL}/adhesionDecision/${idMagasin}`, { 
+        statut: decision 
+      });
+
+      await fetchAdhesionRequests();
+      toast.success(`Vendeur ${decision} avec succès !`);
+      
+      console.log(`Demande ${decision === 'approuve' ? 'approuvée' : 'refusée'} avec succès`);
+    } catch (error) {
+      console.error(`Erreur lors de la ${decision === 'approuve' ? 'approbation' : 'refus'} :`, error);
+      // Gérer l'erreur (afficher un message à l'utilisateur par exemple)
+    }
+  };
+
+  const handleAccept = async (id: number) => {
   // exemple logique backend
   await axios.put(`${API_BASE_URL}/users/${id}/activate`);
   setAccounts(prev => prev.map(a => a.id === id ? { ...a, status: 'active' } : a));
@@ -83,11 +164,15 @@ const handleReject = async (id: number) => {
   await axios.delete(`${API_BASE_URL}/users/${id}`);
   setAccounts(prev => prev.filter(a => a.id !== id));
 };
-
 const handleRoleChange = async (id: number, role: string) => {
   await axios.put(`${API_BASE_URL}/users/${id}`, { role });
   setAccounts(prev => prev.map(a => a.id === id ? { ...a, role } : a));
-};
+  };
+  
+  const handleLogout = () => {
+    sessionStorage.removeItem('activeTab'); // 🔥 supprime le tab actif sauvegardé
+    onLogout(); // ta logique de déconnexion (redirection, suppression token, etc.)
+  };
   
   const renderContent = () => {
     switch (activeTab) {
@@ -213,121 +298,212 @@ const handleRoleChange = async (id: number, role: string) => {
       case 'accounts':
         return (
           <div className="space-y-6">
-            {/* En-tête */}
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-900">Gestion des comptes</h3>
-              <button
-                onClick={() => setIsAddUserModalOpen(true)}
-                className="bg-[#2D8A47] text-white px-4 py-2 rounded-lg hover:bg-[#245A35] transition-colors flex items-center gap-2"
-              >
-                <Plus size={18} /> Nouveau compte
-              </button>
-            </div>
+            {/* SECTION 1 : DEMANDES  */}
+            <div className="section-card">
+              <h3 className="text-xl font-bold mb-4">Demandes d'adhésion des vendeurs</h3>
 
-            {/* Barre de recherche */}
-            <div className="mb-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-                <input
-                  type="text"
-                  placeholder="Rechercher un compte..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D8A47]"
-                />
+              <div className="mb-4 flex justify-end gap-2">
+                <button
+                  className={`px-4 py-2 rounded-lg font-medium text-sm ${filterStatus === 'en_attente' ? 'bg-[#FFA726] text-white hover:bg-[#FFB74D]' : 'bg-gray-200 text-gray-700'}`}
+                  onClick={() => setFilterStatus('en_attente')}
+                >
+                  En attente
+                </button>
+                <button
+                  className={`px-4 py-2 rounded-lg font-medium text-sm ${filterStatus === 'refuse' ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700'}`}
+                  onClick={() => setFilterStatus('refuse')}
+                >
+                  Refusées
+                </button>
+              </div>
+
+              <div className="overflow-x-auto bg-white rounded-lg shadow">
+                <table className="w-full table-auto">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Magasin</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Type</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Propriétaire</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Email</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Rôle</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Adresse</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Contact</th>
+                      <th className="px-4 py-2 text-center text-sm font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {(() => {
+                      const filtered = adhesionRequests.filter(r =>
+                        filterStatus === 'en_attente'
+                          ? r.statut === 'en_attente'
+                          : r.statut === 'refuse'
+                      );
+
+                      if (filtered.length === 0) {
+                        return (
+                          <tr className="bg-gray-50">
+                            <td colSpan={8} className="text-center py-3 text-gray-600 text-sm">
+                              {filterStatus === 'en_attente'
+                                ? "Aucune demande d'adhésion en attente."
+                                : "Aucune demande refusée."}
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return filtered.map(request => (
+                        <tr key={request.idMagasin} className="hover:bg-gray-50">
+                          <td className="px-4 py-2">{request.nomMagasin}</td>
+                          <td className="px-4 py-2">{request.type}</td>
+                          <td className="px-4 py-2">{request.proprietaire.nom}</td>
+                          <td className="px-4 py-2">{request.proprietaire.email}</td>
+                          <td className="px-4 py-2">{request.proprietaire.role}</td>
+                          <td className="px-4 py-2">{request.proprietaire.adresse}</td>
+                          <td className="px-4 py-2">{request.proprietaire.tel}</td>
+                          <td className="px-4 py-2 text-center">
+                            {filterStatus === 'en_attente' ? (
+                              <div className="flex justify-center gap-2">
+                                <button
+                                  onClick={() => handleAdhesionDecision(request.idMagasin, 'approuve')}
+                                  className="bg-[#2D8A47] text-white px-3 py-1 rounded hover:bg-[#245A35] text-sm"
+                                >
+                                  Accepter
+                                </button>
+                                <button
+                                  onClick={() => handleAdhesionDecision(request.idMagasin, 'refuse')}
+                                  className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 text-sm"
+                                >
+                                  Refuser
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex justify-center gap-2">
+                                <button
+                                  onClick={() => handleAdhesionDecision(request.idMagasin, 'approuve')}
+                                  className="bg-[#2D8A47] text-white px-3 py-1 rounded hover:bg-[#245A35] text-sm"
+                                >
+                                  Réapprouver
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteRejected(request.idMagasin, request.nomMagasin)}
+                                  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm"
+                                >
+                                  Supprimer
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
               </div>
             </div>
+            
+            {/* SECTION 2 : GESTION GÉNÉRALE  */}
+            <div className="section-card">
+              <h3 className="text-xl font-bold mb-4">Gestion des comptes</h3>
+              <div className="mb-4 flex items-center gap-3">
+                {/* Barre de recherche */}
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16}  />
+                  <input
+                    type="text"
+                    placeholder="Rechercher un compte..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D8A47]"
+                  />
+                </div>
+                <button
+                  className="bg-[#2D8A47] text-white px-4 py-2 rounded-lg hover:bg-[#245A35] flex items-center gap-2"
+                  onClick={() => setIsAddUserModalOpen(true)}
+                >
+                  <Plus size={18} /> Ajouter un compte
+                </button>
+              </div>
 
-            {/* Tableau des comptes */}
-            <div className="overflow-x-auto bg-white rounded-lg shadow">
-              <table className="w-full table-auto">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Nom</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Rôle</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Activité</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date d'inscription</th>
-                    <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {accounts
-                    .filter(account =>
-                      (account?.name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-                      (account?.email?.toLowerCase() || '').includes(searchQuery.toLowerCase())
-                    )
-                    .map(account => (
-                      <tr key={account.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{account.name}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{account.email}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 capitalize">
-                          <select
-                            value={account.role}
-                            onChange={(e) => handleRoleChange(account.id, e.target.value)}
-                            className="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D8A47]"
-                          >
-                            <option value="client">Client</option>
-                            <option value="vendor">Vendeur</option>
-                            <option value="admin">Admin</option>
-                          </select>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            account.statut === 'approuve' ? 'bg-green-100 text-green-800' :
-                            account.statut === 'en_attente' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {account.statut}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            account.activityStatus === 'actif' ? 'bg-[#2D8A47] bg-opacity-10 text-[#2D8A47]' :
-                            'bg-gray-200 text-gray-600'
-                          }`}>
-                            {account.activityStatus === 'actif' ? 'Actif' : 'Inactif'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{account.joinDate}</td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            {account.status === 'pending' && (
-                              <button
-                                onClick={() => handleAccept(account.id)}
-                                className="bg-[#2D8A47] text-white px-3 py-1 rounded hover:bg-[#245A35] transition-colors text-sm"
-                              >
-                                Accepter
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleReject(account.id)}
-                              className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition-colors text-sm"
+              {/* Tableau général */}
+              <div className="overflow-x-auto bg-white rounded-lg shadow">
+                <table className="w-full table-auto">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Nom</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Rôle</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Activité</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date d'inscription</th>
+                      <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {accounts
+                      .filter(account =>
+                        (account?.name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+                        (account?.email?.toLowerCase() || '').includes(searchQuery.toLowerCase())
+                      )
+                      .map(account => (
+                        <tr key={account.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{account.name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{account.email}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 capitalize">
+                            <select
+                              value={account.role}
+                              onChange={(e) => handleRoleChange(account.id, e.target.value)}
+                              className="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D8A47]"
                             >
-                              Supprimer
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
+                              <option value="client">Client</option>
+                              <option value="vendor">Vendeur</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusBadge status={account.statut} />
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusBadge status={account.activityStatus} />
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{account.joinDate}</td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              {account.status === 'pending' && (
+                                <button
+                                  onClick={() => handleAccept(account.id)}
+                                  className="bg-[#2D8A47] text-white px-3 py-1 rounded hover:bg-[#245A35] transition-colors text-sm"
+                                >
+                                  Accepter
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleReject(account.id)}
+                                className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition-colors text-sm"
+                              >
+                                Supprimer
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
 
-            {/* Modal d’ajout utilisateur */}
-            {isAddUserModalOpen && (
-              <AddUserModal
-                isOpen={isAddUserModalOpen}
-                onClose={() => setIsAddUserModalOpen(false)}
-                role="client"
-                onUserAdded={(newUser) => {
-                  // Ajouter le nouvel utilisateur à la liste existante
-                  setAccounts(prev => [newUser, ...prev]);
-                }}
-              />
-            )}
-          </div>
+              {/* Modal d’ajout utilisateur */}
+              {isAddUserModalOpen && (
+                <AddUserModal
+                  isOpen={isAddUserModalOpen}
+                  onClose={() => setIsAddUserModalOpen(false)}
+                  role="client"
+                  onUserAdded={(newUser) => {
+                    // Ajouter le nouvel utilisateur à la liste existante
+                    setAccounts(prev => [newUser, ...prev]);
+                  }}
+                />
+              )}
+            </div>
+          </div>    
         );
 
       case 'products':
@@ -529,9 +705,9 @@ const handleRoleChange = async (id: number, role: string) => {
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar verticale */}
-      <aside className="w-64 bg-[#2D8A47] text-white flex flex-col shadow-xl">
+      <aside className="sidebar">
         {/* Header du sidebar */}
-        <div className="p-6 border-b border-white border-opacity-20">
+        <div className="sidebar-header">
           <h1 className="text-xl font-bold flex items-center gap-2">
             🏛️ Admin Dashboard
           </h1>
@@ -540,7 +716,7 @@ const handleRoleChange = async (id: number, role: string) => {
 
         {/* Navigation verticale */}
         <nav className="flex-1 py-4">
-          <div className="space-y-1 px-3">
+          <div className="sidebar-nav">
             {[
               { id: 'overview', label: 'Vue d\'ensemble', icon: <BarChart3 size={20} /> },
               { id: 'accounts', label: 'Comptes', icon: <Users size={20} /> },
@@ -553,9 +729,7 @@ const handleRoleChange = async (id: number, role: string) => {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as TabType)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-white text-[#2D8A47] shadow-md'
-                    : 'text-white hover:bg-white hover:bg-opacity-10'
+                  activeTab === tab.id ? 'active' : ''
                 }`}
               >
                 {tab.icon}
@@ -566,10 +740,10 @@ const handleRoleChange = async (id: number, role: string) => {
         </nav>
 
         {/* Bouton déconnexion en bas */}
-        <div className="p-3 border-t border-white border-opacity-20">
+        <div className="sidebar-footer">
           <button
-            onClick={onLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-white hover:bg-white hover:bg-opacity-10 transition-all"
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-white hover:bg-[#1F4F25] transition-all"
           >
             <LogOut size={20} />
             <span>Déconnexion</span>
@@ -580,29 +754,25 @@ const handleRoleChange = async (id: number, role: string) => {
       {/* Contenu principal */}
       <div className="flex-1 flex flex-col">
         {/* Header supérieur */}
-        <header className="bg-white shadow-sm border-b border-gray-200">
-          <div className="px-8 py-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {activeTab === 'overview' && "Vue d'ensemble"}
-                  {activeTab === 'accounts' && "Gestion des comptes"}
-                  {activeTab === 'products' && "Gestion des produits"}
-                  {activeTab === 'sponsors' && "Gestion des sponsors"}
-                  {activeTab === 'analytics' && "Analytiques et rapports"}
-                  {activeTab === 'settings' && "Paramètres"}
-                </h2>
-                <p className="text-sm text-gray-500 mt-1">Plateforme d'administration Tsena.mg</p>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <p className="text-sm font-medium text-gray-700">Jeudi 23 Octobre 2025</p>
-                  <p className="text-xs text-gray-500">Antananarivo, Madagascar</p>
-                </div>
-              </div>
-            </div>
+        <header className="header-horizontal">
+        <div className="header-content">
+          <div className="header-left">
+            <h2>
+              {activeTab === 'overview' && "Vue d'ensemble"}
+              {activeTab === 'accounts' && "Gestion des comptes"}
+              {activeTab === 'products' && "Gestion des produits"}
+              {activeTab === 'sponsors' && "Gestion des sponsors"}
+              {activeTab === 'analytics' && "Analytiques et rapports"}
+              {activeTab === 'settings' && "Paramètres"}
+            </h2>
+            <p>Plateforme d'administration Tsena.mg</p>
           </div>
-        </header>
+          <div className="header-right">
+            <p>{formatDate(currentDate)}</p>
+            <p>Antananarivo, Madagascar</p>
+          </div>
+        </div>
+      </header>
 
         {/* Zone de contenu */}
         <main className="flex-1 p-8 overflow-y-auto">

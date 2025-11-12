@@ -23,8 +23,8 @@ import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { NewProductModal } from '../components/NewProductModal';
 import { ModifyProductModal } from '../components/modifyProductModal';
 import { ViewProductModal } from "../components/viewProductModal";
+import { NewLocationModal } from '../components/NewLocationModal';
 import { StatusBadge } from "../components/StatusBadge";
-import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { UserData } from '../config/authStorage';
 import { API_BASE_URL } from '../config/api';
@@ -82,6 +82,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
   const [orders, setOrders] = useState(mockOrders);
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
   const [isModifyProductModalOpen, setModifyProductModalOpen] = useState(false);
+  const [isNewLocationModalOpen, setIsNewLocationModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
@@ -120,7 +121,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
-    }, 500); // délai de 500ms
+    }, 1000); 
 
     return () => {
       clearTimeout(handler);
@@ -136,7 +137,8 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
       const filtered = products.filter(p =>
         p.nom.toLowerCase().includes(term) ||
         p.description.toLowerCase().includes(term) ||
-        p.price.toString().includes(term)
+        (Number(term) === p.price) ||
+        (Number(term) === p.stock)
       );
       setFilteredProducts(filtered);
     }
@@ -157,6 +159,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
       if (produits.length === 0) {
         toast.info("Vous n'avez pas encore ajouté de produit!");
         setProducts([]);
+        setFilteredProducts([]);
         return;
       }
 
@@ -164,7 +167,6 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
         ...p,
         nom: p.name,
         image: p.images?.[0] || '',
-        sales: p.sales || 0,
         views: p.views || 0,
         price: Number(p.price),
         status: p.status,
@@ -174,6 +176,8 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
       );
 
       setProducts(formatted);
+      setFilteredProducts(formatted);
+      console.log(formatted)
     } catch (error) {
       console.error('Erreur Axios:', error);
       toast.error('Impossible de récupérer les produits');
@@ -261,7 +265,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
     return new Intl.NumberFormat('mg-MG').format(price) + ' Ar';
   };
 
-  const handleSearchProducts = async (filters: { status?: string, categoryId?: string, minPrice?: string, maxPrice?: string, query?: string }) => {
+  const handleSearchProducts = async (filters: { status?: string, categoryId?: string, isLocation?: boolean, query?: string }) => {
     try {
       const response = await axios.post(
         `${API_BASE_URL}/productbyMerchand/search/${currentUser.id}`,
@@ -278,7 +282,9 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
         views: p.views || 0,
         price: Number(p.price),
         status: p.status,
-        createdAt: p.createdAt
+        createdAt: p.createdAt,
+        typeProduit: p.typeProduit,
+        locationDetails: p.locationDetails || null
       }));
 
       setFilteredProducts(formatted);
@@ -290,9 +296,18 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
   
   const sections = [
     {
+      title: "Type",
+      type: "typeProduit",
+      options: [
+        { label: "Vente", value: "vente" },
+        { label: "Location", value: "location" }
+      ]
+    },
+    {
       title: "Statut",
       type: "status",
       options: [
+      { label: "Tous", value: "all" },
         { label: "Publié", value: "publie" },
         { label: "Brouillon", value: "brouillon" },
         { label: "En attente", value: "en_attente" }
@@ -307,10 +322,21 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
 
   const handleApplyFilter = async (type: string, value: any) => {
     try {
+
+      if (type === "status" && value === "all") {
+        setFilteredProducts(products);
+        setShowFilterDropdown(false);
+        return;
+      }
+      
       const filters: any = {};
 
       if (type === "status") filters.status = value;
       if (type === "categoryId") filters.categoryId = value;
+      if (type === "typeProduit") {
+        if (value === "location") filters.isLocation = true;
+        if (value === "vente") filters.isLocation = false;
+      }
 
       await handleSearchProducts(filters);
 
@@ -384,9 +410,10 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
 
       <div className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={handleTabChange}>
-          <TabsList className="grid w-full grid-cols-4 bg-white border shadow-sm mb-8">
+          <TabsList className="grid w-full grid-cols-5 bg-white border shadow-sm mb-8">
             <TabsTrigger value="overview" className="data-[state=active]:bg-[#2D8A47] data-[state=active]:text-white">Vue d'ensemble</TabsTrigger>
             <TabsTrigger value="products" className="data-[state=active]:bg-[#2D8A47] data-[state=active]:text-white">Produits</TabsTrigger>
+            <TabsTrigger value="sponsor" className="data-[state=active]:bg-[#2D8A47] data-[state=active]:text-white">Sponsors</TabsTrigger>
             <TabsTrigger value="orders" className="data-[state=active]:bg-[#2D8A47] data-[state=active]:text-white">Commandes</TabsTrigger>
             <TabsTrigger value="analytics" className="data-[state=active]:bg-[#2D8A47] data-[state=active]:text-white">Analyses</TabsTrigger>
           </TabsList>
@@ -541,13 +568,191 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Mes produits</CardTitle>
+                  <CardTitle>Mes produits et services locations</CardTitle>
+                  <div className='flex items-center justify-end space-x-3'>
+                    <Button 
+                      className="bg-[#2D8A47] hover:bg-[#245A35]"
+                      onClick={() => setIsNewProductModalOpen(true)}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Ajouter un produit
+                    </Button>
+                    <Button 
+                      style={{ backgroundColor: "#2563EB", color: "white", transition: "0.2s" }}
+                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#1D4ED8")}
+                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#2563EB")}
+                      onClick={() => setIsNewLocationModalOpen(true)}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Nouvelle location
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* Search and Filters */}
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Rechercher un produit..."
+                      value={searchTerm}
+                      onChange={(e: any) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  
+                  {/* Bouton Filtres */}
+                  <div className="relative inline-block">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowFilterDropdown(prev => !prev)}
+                    >
+                      <Filter className="h-4 w-4 mr-2" />
+                      Filtres
+                    </Button>
+
+                    {showFilterDropdown && (
+                      <div className="absolute right-0 mt-1 w-auto max-h-[550px] overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 whitespace-nowrap" style={{ minWidth: "260px" }}>
+                        {sections.map((section, index) => {
+                          const isOpen = openSections[index] || false;
+                          return (
+                            <div key={index} className="border-b border-gray-100">
+                              <button
+                                onClick={() =>
+                                  setOpenSections(prev => ({ ...prev, [index]: !prev[index] }))
+                                }
+                                className="w-full px-3 py-2 flex justify-between items-center text-left text-sm font-medium text-gray-700 hover:bg-gray-100"
+                              >
+                                {section.title}
+                                <svg
+                                  className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
+
+                              {isOpen && (
+                                <div className="px-2 pb-2">
+                                  {section.options.map((opt: any, idx: number) => (
+                                    <button
+                                      key={idx}
+                                      onClick={() => handleApplyFilter(section.type, opt.value)}
+                                      className="block w-full text-left px-3 py-1 text-sm rounded
+                                                transition-shadow
+                                                hover:bg-gray-500 hover:shadow-lg hover:text-gray-900"
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Products Table */}
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Produit</TableHead>
+                        <TableHead>Prix</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Détails location</TableHead>
+                        <TableHead>Stock</TableHead>
+                        <TableHead>Statut</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredProducts.map((product) => (
+                        <TableRow key={product.id}>
+                          <TableCell>
+                            <div className="flex items-center space-x-3">
+                              <ImageWithFallback
+                                src={product.image}
+                                alt={product.nom}
+                                className="w-12 h-12 object-cover rounded"
+                              />
+                              <div>
+                                <p className="font-medium">{product.nom}</p>
+                                <p className="text-sm text-gray-600">{product.views} vues</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-medium">{formatPrice(product.price)}</TableCell>
+                          <TableCell>{<StatusBadge status={product.typeProduit} />}</TableCell>
+                          <TableCell>
+                            {product.typeProduit === "location" ? (
+                              <div className="text-sm leading-tight text-gray-700">
+                                <p className="font-medium">{product.locationDetails?.typePrix || "—"}</p>
+                                <p className="font-medium">
+                                  Caution : {formatPrice(product.locationDetails?.caution || 0)}
+                                </p>
+                              </div>
+                            ) : (
+                              <span className="text-gray-500">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{product.stock > 0 ? product.stock : <span className="text-red-500">Rupture</span>}</TableCell>
+                          <TableCell>{<StatusBadge status={product.status} />}</TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => handleViewProduct(product.id)}
+                                title="Voir le produit"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => handleEditProduct(product.id)}
+                                title="Modifier le produit"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-red-500 hover:text-red-700"
+                                onClick={() => handleDeleteProduct(product.id)}
+                                title="Supprimer le produit"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="sponsor">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Mes produits sponsorisés</CardTitle>
                   <Button 
                     className="bg-[#2D8A47] hover:bg-[#245A35]"
-                    onClick={() => setIsNewProductModalOpen(true)}
+                    onClick={() => setIsNewLocationModalOpen(true)}
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    Ajouter un produit
+                    Nouvelle location
                   </Button>
                 </div>
               </CardHeader>
@@ -629,6 +834,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                         <TableHead>Prix</TableHead>
                         <TableHead>Stock</TableHead>
                         <TableHead>Statut</TableHead>
+                        <TableHead>Type</TableHead>
                         <TableHead>Ventes</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
@@ -652,6 +858,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                           <TableCell className="font-medium">{formatPrice(product.price)}</TableCell>
                           <TableCell>{product.stock > 0 ? product.stock : <span className="text-red-500">Rupture</span>}</TableCell>
                           <TableCell>{<StatusBadge status={product.status} />}</TableCell>
+                          <TableCell>{<StatusBadge status={product.typeProduit} />}</TableCell>
                           <TableCell>{product.sales}</TableCell>
                           <TableCell>
                             <div className="flex space-x-2">
@@ -826,6 +1033,16 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
         onClose={() => setIsViewProductModalOpen(false)}
         product={viewedProduct}
         categories={categories}
+      />
+
+      <NewLocationModal
+        isOpen={isNewLocationModalOpen}
+        onClose={() => {
+          setIsNewLocationModalOpen(false);
+          setSelectedProduct(null);
+        }}
+        categories={categories}
+        onSave={handleNewProduct}
       />
     </div>
   );

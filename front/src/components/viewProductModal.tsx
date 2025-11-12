@@ -1,6 +1,7 @@
 import React from "react";
 import { Dialog, DialogHeader, DialogTitle, DialogContentWide } from "./ui/dialog";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
+import { StatusBadge } from "../components/StatusBadge";
 
 interface ViewProductModalProps {
   isOpen: boolean;
@@ -18,6 +19,8 @@ export const ViewProductModal: React.FC<ViewProductModalProps> = ({
   if (!product) return null;
 
   const categoryName = categories.find(c => c.id === product.category)?.nom;
+
+  const isLocation = product.typeProduit === "location";
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       {/* 🔹 Modal avec border-radius et bordure visible comme dans ModifyProductModal */}
@@ -66,15 +69,19 @@ export const ViewProductModal: React.FC<ViewProductModalProps> = ({
 
         {/* 🔹 Infos principales sur 2 lignes */}
         <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
-          <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
-            <span className="font-medium text-gray-900">Prix :</span>
-            <span>{new Intl.NumberFormat("mg-MG").format(product.price)} Ar</span>
-          </div>
+          {!isLocation && (
+            <>
+              <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
+                <span className="font-medium text-gray-900">Prix :</span>
+                <span>{new Intl.NumberFormat("mg-MG").format(product.price)} Ar</span>
+              </div>
 
-          <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
-            <span className="font-medium text-gray-900">Stock :</span>
-            <span>{product.stock || "—"}</span>
-          </div>
+              <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
+                <span className="font-medium text-gray-900">Stock :</span>
+                <span>{product.stock || "—"}</span>
+              </div>
+            </>
+          )}
 
           <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
             <span className="font-medium text-gray-900">Vues :</span>
@@ -90,6 +97,42 @@ export const ViewProductModal: React.FC<ViewProductModalProps> = ({
             <span className="font-medium text-gray-900">Catégorie :</span>
             <span>{categoryName}</span>
           </div>
+
+          <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
+            <span className="font-medium text-gray-900">Type :</span>
+            <span className="capitalize">
+              {<StatusBadge status={product.typeProduit === "location" ? "Location" : "Vente"}/>}
+            </span>
+          </div>
+
+          {/* 🟦 Si LOCATION */}
+          {isLocation && (
+            <>
+              <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
+                <span className="font-medium text-gray-900">Tarif :</span>
+                <span>{new Intl.NumberFormat("mg-MG").format(product.price)}</span>
+              </div>
+
+              <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
+                <span className="font-medium text-gray-900">Caution :</span>
+                <span>
+                  {new Intl.NumberFormat("mg-MG").format(product.locationDetails?.caution || 0)}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
+                <span className="font-medium text-gray-900">Période :</span>
+                <span>{product.locationDetails?.typePrix || "—"}</span>
+              </div>
+
+              {product.locationDetails?.duree_min && (
+                <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
+                  <span className="font-medium text-gray-900">Durée minimale :</span>
+                  <span>{product.locationDetails.duree_min} jour(s)</span>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </DialogContentWide>
     </Dialog>
