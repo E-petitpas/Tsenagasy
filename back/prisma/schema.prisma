@@ -82,7 +82,7 @@ model Produit {
   magasin         Magasin          @relation(fields: [magasinId], references: [id_magasin])
   lignePaniers    LignePanier[]
   produitLocation ProduitLocation?
-  Sponsor         Sponsor?
+  Sponsor         Sponsor?         @relation("ProduitSponsor")
 
   @@map("produits")
 }
@@ -110,7 +110,7 @@ model Sponsor {
   dateDebut DateTime @default(now())
   dateFin   DateTime
   produitId String   @unique @db.Uuid
-  produit   Produit  @relation(fields: [produitId], references: [id], onDelete: Cascade)
+  produit   Produit  @relation("ProduitSponsor", fields: [produitId], references: [id], onDelete: Cascade)
 
   @@map("sponsors")
 }

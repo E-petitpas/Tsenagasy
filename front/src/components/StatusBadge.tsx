@@ -43,15 +43,19 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
     case "approuve":
     case "terminé":
     case "termine":
+    case "validé":
+    case "valide":
       label =
         normalized === "publié" || normalized === "publie"
-          ? "Publié"
-          : normalized === "approuvé" || normalized === "approuve"
-          ? "Approuvé"
-          : "Terminé";
-      bgColor = "#5BEC90" 
-      textColor = "#14532D";
-      borderColor = "#22C55E";
+        ? "Publié"
+        : normalized === "approuvé" || normalized === "approuve"
+        ? "Approuvé"
+        : normalized.startsWith("valid")
+        ? "Validé"
+        : "Terminé";
+      bgColor = "#2D8A47" 
+      textColor = "#FFFFFF";
+      borderColor = "#245A35";
       break;
     case "processing":
     case "en traitement":
@@ -75,9 +79,9 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
         normalized === "refusé" || normalized === "refuse"
           ? "Refusé"
           : "Annulé";
-      bgColor = "#F87171"; // rouge vif
-      textColor = "#7F1D1D";
-      borderColor = "#EF4444";
+      bgColor = "#EF4444"; // rouge vif
+      textColor = "#FFFFFF";
+      borderColor = "#DC2626";
       break;
     case "vente":
       label = "Vente";

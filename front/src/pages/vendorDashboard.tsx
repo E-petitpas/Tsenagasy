@@ -4,6 +4,7 @@ import {
   Edit, 
   Trash2, 
   Eye, 
+  RefreshCw,
   DollarSign, 
   Package, 
   Users, 
@@ -89,11 +90,12 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
   const [categories, setCategories] = useState<{ id: string, nom: string }[]>([]);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const [priceRange, setPriceRange] = useState({ min: "", max: "" });
   const [openSections, setOpenSections] = useState<{ [key: number]: boolean }>({});
   const [isViewProductModalOpen, setIsViewProductModalOpen] = useState(false);
   const [viewedProduct, setViewedProduct] = useState<any>(null);
+  const [sponsors, setSponsors] = useState<any[]>([]);
+  const [filteredSponsors, setFilteredSponsors] = useState<any[]>([]);
+  const [selectedSponsorStatus, setSelectedSponsorStatus] = useState("all");
   
 
   useEffect(() => {
@@ -104,6 +106,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
   
   useEffect(() => {
     fetchProducts();
+    fetchSponsors();
   }, [currentUser]);
   
   useEffect(() => {
@@ -170,14 +173,13 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
         views: p.views || 0,
         price: Number(p.price),
         status: p.status,
-        createdAt: p.createdAt
+        createdAt: p.createdAt,
+        sponsorisé: p.sponsorisé
       })).sort(
         (a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
-
       setProducts(formatted);
       setFilteredProducts(formatted);
-      console.log(formatted)
     } catch (error) {
       console.error('Erreur Axios:', error);
       toast.error('Impossible de récupérer les produits');
@@ -344,6 +346,163 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
       setShowFilterDropdown(false);
     } catch (error) {
       toast.error("Erreur lors de l'application du filtre");
+    }
+  };
+
+  const handleAddSponsor = async (produitId: string) => {
+    try {
+      const confirm = await Swal.fire({
+        title: "Sponsoriser ce produit ?",
+        text: "Ce produit sera mis en avant pendant 1 mois.",
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "Oui, sponsoriser",
+        cancelButtonText: "Annuler",
+        confirmButtonColor: "#FACC15",
+        cancelButtonColor: "#d33",
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showLoaderOnConfirm: true,
+        preConfirm: async () => {
+          try {
+            const response = await axios.post(`${API_BASE_URL}/sponsor/create`, { produitId });
+
+            await fetchProducts();
+            await fetchSponsors();
+
+            return response.data;
+          } catch (error: any) {
+            console.error("Erreur lors du sponsoring :", error);
+            const message = error.response?.data?.error || "Erreur lors du sponsoring du produit.";
+            Swal.showValidationMessage(message);
+            throw error;
+          }
+        }
+      });
+
+      if (confirm.isConfirmed) {
+        Swal.close(); // ferme le modal
+        toast.success("Produit sponsorisé avec succès !");
+      }
+    } catch (error) {
+      console.error("Erreur globale:", error);
+      toast.error("Une erreur est survenue lors du sponsoring.");
+    }
+  };
+
+  const fetchSponsors = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/sponsors/${currentUser.magasinId}`);
+      setSponsors(res.data);
+      setFilteredSponsors(res.data);
+    } catch (error) {
+      console.error("Erreur récupération sponsors:", error);
+      toast.error("Impossible de charger les sponsors");
+    }
+  };
+
+  const handleResponsor = async (sponsorId: string) => {
+    try {
+      const confirm = await Swal.fire({
+        title: "Relancer la demande ?",
+        text: "Votre demande sera renvoyée aux administrateurs.",
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "Relancer",
+        cancelButtonText: "Annuler",
+        confirmButtonColor: "#FACC15",
+        showLoaderOnConfirm: true,
+        allowOutsideClick: () => !Swal.isLoading(),
+        allowEscapeKey: false,
+
+        preConfirm: async () => {
+          try {
+            await axios.put(`${API_BASE_URL}/sponsor/resend/${sponsorId}`);
+            
+            return true;
+          } catch (err: any) {
+            Swal.showValidationMessage(
+              err?.response?.data?.error || "Impossible de relancer la demande."
+            );
+            return false;
+          }
+        }
+      });
+
+      if (confirm.isConfirmed) {
+        Swal.close();
+        await fetchSponsors();
+        toast.success("Demande renvoyée avec succès !");
+      }
+
+    } catch (err) {
+      console.error(err);
+      toast.error("Impossible de relancer la demande.");
+    }
+  };
+
+  const handleDeleteSponsor = async (sponsorId: string) => {
+    try {
+      const confirm = await Swal.fire({
+        title: "Supprimer ce sponsoring ?",
+        text: "Cette action est définitive.",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Supprimer",
+        cancelButtonText: "Annuler",
+        confirmButtonColor: "#d33",
+
+        /* 🔒 FIGE LE MODAL */
+        allowOutsideClick: () => !Swal.isLoading(),
+        allowEscapeKey: false,
+        showLoaderOnConfirm: true,
+
+        preConfirm: async () => {
+          try {
+            await axios.delete(`${API_BASE_URL}/sponsor/delete/${sponsorId}`);
+
+            return true;
+          } catch (err: any) {
+            Swal.showValidationMessage(
+              err?.response?.data?.error || "Erreur lors de la suppression"
+            );
+            return false;
+          }
+        }
+      });
+
+      if (confirm.isConfirmed) {
+        Swal.close();
+        toast.success("Sponsor supprimé !");
+        fetchSponsors();
+      }
+
+    } catch (err) {
+      console.error(err);
+      toast.error("Impossible de supprimer le sponsor.");
+    }
+  };
+  
+  const sponsorFilterOptions = [
+    { label: "Tous", value: "all" },
+    { label: "En attente", value: "en_attente" },
+    { label: "Validé", value: "validé" },
+    { label: "Refusé", value: "refusé" }
+  ];
+
+  const filterSponsorsByStatus = async (status: string) => {
+    setSelectedSponsorStatus(status);
+
+    try {
+      const res = await axios.post(
+        `${API_BASE_URL}/sponsors/filter/${currentUser.magasinId}`,
+        { statut: status }
+      );
+
+      setFilteredSponsors(res.data);
+    } catch (error) {
+      console.error("Erreur filtre sponsors:", error);
+      toast.error("Impossible de filtrer.");
     }
   };
 
@@ -669,6 +828,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                         <TableHead>Détails location</TableHead>
                         <TableHead>Stock</TableHead>
                         <TableHead>Statut</TableHead>
+                        <TableHead>Sponsor</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -684,7 +844,6 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                               />
                               <div>
                                 <p className="font-medium">{product.nom}</p>
-                                <p className="text-sm text-gray-600">{product.views} vues</p>
                               </div>
                             </div>
                           </TableCell>
@@ -704,6 +863,31 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                           </TableCell>
                           <TableCell>{product.stock > 0 ? product.stock : <span className="text-red-500">Rupture</span>}</TableCell>
                           <TableCell>{<StatusBadge status={product.status} />}</TableCell>
+                          <TableCell className="text-center">
+                            {product.sponsorisé ? (
+                              <div className="flex items-center justify-center w-8 h-8">
+                                <span className="text-gray-400 text-lg font-semibold">—</span>
+                              </div>
+                            ) : product.status === "brouillon" ? (
+                              <div className="flex items-center justify-center w-8 h-8">
+                                <span className="text-gray-400 text-lg font-semibold">—</span>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleAddSponsor(product.id)}
+                                title="Sponsoriser ce produit"
+                                className="flex items-center justify-center w-8 h-8 rounded-full text-black font-bold transition-colors duration-200 shadow-md border border-yellow-400"
+                                style={{
+                                  backgroundColor: '#FACC15',
+                                  boxShadow: "0 1px 2px rgba(0,0,0,0.1)"
+                                  }}
+                                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#EAB308")}
+                                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#FACC15")}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </button>
+                            )}
+                          </TableCell>
                           <TableCell>
                             <div className="flex space-x-2">
                               <Button 
@@ -747,84 +931,25 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Mes produits sponsorisés</CardTitle>
-                  <Button 
-                    className="bg-[#2D8A47] hover:bg-[#245A35]"
-                    onClick={() => setIsNewLocationModalOpen(true)}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nouvelle location
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {/* Search and Filters */}
-                <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      placeholder="Rechercher un produit..."
-                      value={searchTerm}
-                      onChange={(e: any) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
                   
                   {/* Bouton Filtres */}
-                  <div className="relative inline-block">
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowFilterDropdown(prev => !prev)}
+                  <div className="flex items-center mb-3 gap-3">
+                    <label className="text-sm text-gray-600">Statut :</label>
+                    <select
+                      value={selectedSponsorStatus}
+                      onChange={(e) => filterSponsorsByStatus(e.target.value)}
+                      className="border border-gray-300 rounded-md px-3 py-1 text-sm"
                     >
-                      <Filter className="h-4 w-4 mr-2" />
-                      Filtres
-                    </Button>
-
-                    {showFilterDropdown && (
-                      <div className="absolute right-0 mt-1 w-auto max-h-[550px] overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 whitespace-nowrap" style={{ minWidth: "260px" }}>
-                        {sections.map((section, index) => {
-                          const isOpen = openSections[index] || false;
-                          return (
-                            <div key={index} className="border-b border-gray-100">
-                              <button
-                                onClick={() =>
-                                  setOpenSections(prev => ({ ...prev, [index]: !prev[index] }))
-                                }
-                                className="w-full px-3 py-2 flex justify-between items-center text-left text-sm font-medium text-gray-700 hover:bg-gray-100"
-                              >
-                                {section.title}
-                                <svg
-                                  className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </button>
-
-                              {isOpen && (
-                                <div className="px-2 pb-2">
-                                  {section.options.map((opt: any, idx: number) => (
-                                    <button
-                                      key={idx}
-                                      onClick={() => handleApplyFilter(section.type, opt.value)}
-                                      className="block w-full text-left px-3 py-1 text-sm rounded
-                                                transition-shadow
-                                                hover:bg-gray-500 hover:shadow-lg hover:text-gray-900"
-                                    >
-                                      {opt.label}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                      {sponsorFilterOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>                
                   </div>
                 </div>
-
+              </CardHeader>
+              <CardContent>                 
                 {/* Products Table */}
                 <div className="overflow-x-auto">
                   <Table>
@@ -832,62 +957,75 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                       <TableRow>
                         <TableHead>Produit</TableHead>
                         <TableHead>Prix</TableHead>
-                        <TableHead>Stock</TableHead>
                         <TableHead>Statut</TableHead>
                         <TableHead>Type</TableHead>
-                        <TableHead>Ventes</TableHead>
+                        <TableHead>Date début</TableHead>
+                        <TableHead>Date fin</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredProducts.map((product) => (
-                        <TableRow key={product.id}>
+                      {filteredSponsors.map((s) => (
+                        <TableRow key={s.id}>
                           <TableCell>
                             <div className="flex items-center space-x-3">
                               <ImageWithFallback
-                                src={product.image}
-                                alt={product.nom}
+                                src={s.produit.images[0]}
+                                alt={s.produit.nom}
                                 className="w-12 h-12 object-cover rounded"
                               />
                               <div>
-                                <p className="font-medium">{product.nom}</p>
-                                <p className="text-sm text-gray-600">{product.views} vues</p>
+                                <p className="font-medium">{s.produit.nom}</p>
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="font-medium">{formatPrice(product.price)}</TableCell>
-                          <TableCell>{product.stock > 0 ? product.stock : <span className="text-red-500">Rupture</span>}</TableCell>
-                          <TableCell>{<StatusBadge status={product.status} />}</TableCell>
-                          <TableCell>{<StatusBadge status={product.typeProduit} />}</TableCell>
-                          <TableCell>{product.sales}</TableCell>
+
+                          <TableCell>{formatPrice(Number(s.produit.prix))}</TableCell>
+
                           <TableCell>
-                            <div className="flex space-x-2">
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => handleViewProduct(product.id)}
-                                title="Voir le produit"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => handleEditProduct(product.id)}
-                                title="Modifier le produit"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="text-red-500 hover:text-red-700"
-                                onClick={() => handleDeleteProduct(product.id)}
-                                title="Supprimer le produit"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
+                            <StatusBadge status={s.statut} />
+                          </TableCell>
+
+                          <TableCell>
+                            <StatusBadge status={s.produit.isLocation ? "location" : "vente"} />
+                          </TableCell>
+
+                          <TableCell>
+                            {new Date(s.dateDebut).toLocaleDateString("fr-FR")}
+                          </TableCell>
+
+                          <TableCell>
+                            {new Date(s.dateFin).toLocaleDateString("fr-FR")}
+                          </TableCell>
+
+                          <TableCell>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleViewProduct(s.produit.id)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                              {s.statut === "refusé" && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-yellow-600 hover:text-yellow-700"
+                                  onClick={() => handleResponsor(s.id)}
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                </Button>
+                              )}
+
+                            {/* Supprimer sponsoring */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-700"
+                              onClick={() => handleDeleteSponsor(s.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>                            
                           </TableCell>
                         </TableRow>
                       ))}

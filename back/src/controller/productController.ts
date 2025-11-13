@@ -150,7 +150,8 @@ export const getProductsByCommercant = async (req: Request, res: Response) => {
     const produits = await prisma.produit.findMany({
       where: { magasinId },
       include: {
-        produitLocation: true, 
+        produitLocation: true,
+        Sponsor: true,
       },
       orderBy: { createdAt: "asc" },
     });
@@ -184,6 +185,8 @@ export const getProductsByCommercant = async (req: Request, res: Response) => {
             lieuRecup: p.produitLocation.lieuRecup,
           }
         : null,
+      sponsorisé: !!p.Sponsor,
+      sponsorStatus: p.Sponsor ? p.Sponsor.statut : null
     }));
 
     return res.status(200).json(mappedProducts);

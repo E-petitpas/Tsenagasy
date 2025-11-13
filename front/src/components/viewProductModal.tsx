@@ -84,8 +84,8 @@ export const ViewProductModal: React.FC<ViewProductModalProps> = ({
           )}
 
           <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
-            <span className="font-medium text-gray-900">Vues :</span>
-            <span>{product.views}</span>
+            <span className="font-medium text-gray-900">Catégorie :</span>
+            <span>{categoryName}</span>
           </div>
 
           <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
@@ -94,8 +94,13 @@ export const ViewProductModal: React.FC<ViewProductModalProps> = ({
           </div>
 
           <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
-            <span className="font-medium text-gray-900">Catégorie :</span>
-            <span>{categoryName}</span>
+            <span className="font-medium text-gray-900">Sponsorisé :</span>
+            <span>{product.sponsorStatus === "validé"
+              ? "Oui"
+              : product.sponsorStatus === "en_attente"
+              ? "En attente"
+              : "Non"}
+            </span>
           </div>
 
           <div className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-md">
