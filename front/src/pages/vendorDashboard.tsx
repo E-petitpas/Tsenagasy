@@ -79,7 +79,6 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
     return sessionStorage.getItem('vendorActiveTab') || 'overview';
   });
   const [searchTerm, setSearchTerm] = useState('');
-  const [stats, setStats] = useState(mockStats);
   const [orders, setOrders] = useState(mockOrders);
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
   const [isModifyProductModalOpen, setModifyProductModalOpen] = useState(false);
@@ -96,6 +95,13 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
   const [sponsors, setSponsors] = useState<any[]>([]);
   const [filteredSponsors, setFilteredSponsors] = useState<any[]>([]);
   const [selectedSponsorStatus, setSelectedSponsorStatus] = useState("all");
+  const [popularProducts, setPopularProducts] = useState<any[]>([]);
+  const [popularMode, setPopularMode] = useState<"recent" | "sales">("sales");
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    activeProducts: 0,
+    validSponsors: 0
+  });
   
 
   useEffect(() => {
@@ -107,6 +113,10 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
   useEffect(() => {
     fetchProducts();
     fetchSponsors();
+    fetchStats();
+    if (currentUser?.magasinId) {
+      fetchPopularProducts();
+    }
   }, [currentUser]);
   
   useEffect(() => {
@@ -281,7 +291,6 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
         nom: p.name,
         image: p.images?.[0] || '',
         sales: p.sales || 0,
-        views: p.views || 0,
         price: Number(p.price),
         status: p.status,
         createdAt: p.createdAt,
@@ -506,6 +515,42 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
     }
   };
 
+  const fetchPopularProducts = async () => {
+    try {
+      const res = await axios.get(
+        `${API_BASE_URL}/popular-products/${currentUser.magasinId}`
+      );
+
+      const { mode, products } = res.data;
+
+      const formatted = products.map((p: any) => ({
+        id: p.id,
+        nom: p.nom,
+        image: p.images?.[0] || '',
+        ventes: p.ventes || 0,
+        price: Number(p.prix),
+        createdAt: p.createdAt,
+      }));
+
+      setPopularMode(mode);   // "recent" ou "sales"
+      setPopularProducts(formatted);
+
+    } catch (err) {
+      console.error("Erreur produits populaires:", err);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/vendor/stats/${currentUser.magasinId}`);
+      setStats(res.data);
+
+    } catch (err) {
+      console.error("Erreur stats :", err);
+      toast.error("Impossible de charger les statistiques");
+    }
+  };
+  
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header avec style cohérent */}
@@ -579,48 +624,8 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
 
           <TabsContent value="overview">
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <Card className="bg-gradient-to-br from-[#2D8A47] to-[#4CAF50] text-white border-0 shadow-lg">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-green-100">Chiffre d'affaires</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center">
-                    <div className="bg-white bg-opacity-20 p-2 rounded-lg mr-3">
-                      <DollarSign className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold">{formatPrice(mockStats.totalRevenue)}</div>
-                      <div className="text-xs text-green-100 flex items-center mt-1">
-                        <TrendingUp className="h-3 w-3 mr-1" />
-                        +12% ce mois
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gradient-to-br from-[#FFA726] to-[#FF9800] text-white border-0 shadow-lg">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-orange-100">Commandes</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center">
-                    <div className="bg-white bg-opacity-20 p-2 rounded-lg mr-3">
-                      <Package className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold">{mockStats.totalOrders}</div>
-                      <div className="text-xs text-orange-100 flex items-center mt-1">
-                        <TrendingUp className="h-3 w-3 mr-1" />
-                        +8% ce mois
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0 shadow-lg">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <Card className="!bg-transparent bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0 shadow-lg" onClick={() => setActiveTab("products")}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-blue-100">Produits actifs</CardTitle>
                 </CardHeader>
@@ -630,28 +635,54 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                       <TrendingUp className="h-6 w-6 text-white" />
                     </div>
                     <div>
-                      <div className="text-2xl font-bold">{mockStats.activeProducts}</div>
-                      <div className="text-xs text-blue-100 mt-1">3 en rupture</div>
+                      <div className="text-3xl font-bold">{stats.activeProducts}</div>
+                      <p className="text-xs text-blue-100 mt-1 opacity-90">
+                        Produits actuellement publiés
+                      </p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white border-0 shadow-lg">
+              <Card onClick={() => setActiveTab("sponsor")}
+                style={{
+                backgroundColor: "#FACC15",   // jaune solide
+                borderRadius: "12px",
+                padding: "8px",
+                color: "#FFFF"
+              }}>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-purple-100">Nouveaux clients</CardTitle>
+                  <CardTitle className="text-sm text-yellow-100">Sponsorisé</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center">
                     <div className="bg-white bg-opacity-20 p-2 rounded-lg mr-3">
-                      <Users className="h-6 w-6 text-white" />
+                      <TrendingUp className="h-6 w-6 text-white" />
                     </div>
                     <div>
-                      <div className="text-2xl font-bold">{mockStats.newCustomers}</div>
-                      <div className="text-xs text-purple-100 flex items-center mt-1">
-                        <TrendingUp className="h-3 w-3 mr-1" />
-                        +15% ce mois
-                      </div>
+                      <div className="text-3xl font-bold">{stats.validSponsors}</div>
+                      <p className="text-xs text-yellow-100 mt-1 opacity-90">
+                        Produits mis en avant
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="!bg-transparent bg-gradient-to-br from-[#FFA726] to-[#FF9800] text-white border-0 shadow-lg" onClick={() => setActiveTab("orders")}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-orange-100">Commandes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center">
+                    <div className="bg-white bg-opacity-20 p-2 rounded-lg mr-3">
+                      <Package className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <div className="text-3xl font-bold">{stats.totalOrders}</div>
+                      <p className="text-xs text-orange-100 mt-1 opacity-90">
+                        Total des commandes reçues
+                      </p>
                     </div>
                   </div>
                 </CardContent>
@@ -660,6 +691,64 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
 
             {/* Recent Activity */}
             <div className="grid lg:grid-cols-2 gap-8">
+              <Card className="border-l-4 border-l-[#2D8A47] shadow-md">
+                <CardHeader className="bg-gradient-to-r from-green-50 to-white">
+                  <CardTitle className="flex items-center text-[#2D8A47]">
+                    <TrendingUp className="h-5 w-5 mr-2" />
+                    {popularMode === "recent" ? "Produits récents" : "Produits populaires"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {popularProducts.length === 0 ? (
+                      <p className="text-gray-500 text-sm italic">
+                        Aucun produit disponible pour le moment.
+                      </p>
+                    ) : (
+                      popularProducts.map((product, index) => (
+                        <div key={product.id} onClick={() => {
+                                                        setActiveTab("products")
+                                                        setSearchTerm(product.nom)
+                                                      }}
+                          className="flex items-center space-x-3 p-4 bg-gradient-to-r from-gray-50 to-white border border-gray-100 rounded-lg hover:shadow-md transition-shadow">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                            index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : 'bg-orange-500'
+                          }`}>
+                            {index + 1}
+                          </div>
+
+                          <ImageWithFallback
+                            src={product.image}
+                            alt={product.nom}
+                            className="w-12 h-12 object-cover rounded border-2 border-gray-200"
+                          />
+
+                          <div className="flex-1">
+                            <p className="font-medium text-sm text-gray-900">{product.nom}</p>
+
+                            <div className="flex items-center space-x-2">
+                              {popularMode === "sales" ? (
+                                <span className="text-sm text-[#FFA726] font-medium">
+                                  {product.ventes} ventes
+                                </span>
+                              ) : (
+                                <span className="text-sm text-blue-500 font-medium">Produit récent</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <p className="font-bold text-sm text-[#2D8A47]">
+                              {formatPrice(product.price)}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
               <Card className="border-l-4 border-l-[#FFA726] shadow-md">
                 <CardHeader className="bg-gradient-to-r from-orange-50 to-white">
                   <CardTitle className="flex items-center text-[#FF9800]">
@@ -670,51 +759,16 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                 <CardContent>
                   <div className="space-y-4">
                     {mockOrders.slice(0, 3).map((order) => (
-                      <div key={order.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white border border-gray-100 rounded-lg hover:shadow-md transition-shadow">
+                      <div key={order.id} onClick={() => {
+                        setActiveTab("orders")
+                      }}
+                        className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white border border-gray-100 rounded-lg hover:shadow-md transition-shadow">
                         <div>
                           <p className="font-medium text-gray-900">{order.id}</p>
                           <p className="text-sm text-gray-600">{order.customer}</p>
                           <p className="text-sm text-[#2D8A47] font-bold">{formatPrice(order.total)}</p>
                         </div>
                         {<StatusBadge status={order.status} />}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-l-4 border-l-[#2D8A47] shadow-md">
-                <CardHeader className="bg-gradient-to-r from-green-50 to-white">
-                  <CardTitle className="flex items-center text-[#2D8A47]">
-                    <TrendingUp className="h-5 w-5 mr-2" />
-                    Produits populaires
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {products.slice(0, 3).map((product, index) => (
-                      <div key={product.id} className="flex items-center space-x-3 p-4 bg-gradient-to-r from-gray-50 to-white border border-gray-100 rounded-lg hover:shadow-md transition-shadow">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                          index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : 'bg-orange-500'
-                        }`}>
-                          {index + 1}
-                        </div>
-                        <ImageWithFallback
-                          src={product.image}
-                          alt={product.nom}
-                          className="w-12 h-12 object-cover rounded border-2 border-gray-200"
-                        />
-                        <div className="flex-1">
-                          <p className="font-medium text-sm text-gray-900">{product.nom}</p>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-sm text-[#FFA726] font-medium">{product.sales} ventes</span>
-                            <span className="text-xs text-gray-400">•</span>
-                            <span className="text-xs text-gray-500">{product.views} vues</span>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-sm text-[#2D8A47]">{formatPrice(product.price)}</p>
-                        </div>
                       </div>
                     ))}
                   </div>

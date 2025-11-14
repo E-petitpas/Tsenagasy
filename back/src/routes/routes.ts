@@ -24,12 +24,16 @@ router.get('/getProductbyMerchand/:magasinId', product.getProductsByCommercant);
 router.delete('/deleteProduct/:productId', product.deleteProduct); //ok
 router.post('/modifyProduct/:productId', upload.array("images", 5), product.updateProduct); //ok
 router.post('/productbyMerchand/search/:commercantId', product.searchProductsbyCommercant); //ok
+router.get('/popular-products/:magasinId', product.getPopularProducts)
 
 import * as sponsor from '../controller/sponsorController'
 router.post('/sponsor/create', sponsor.createSponsor); //ok
 router.get('/sponsors/:magasinId', sponsor.getSponsorsByVendor); //ok
 router.put('/sponsor/resend/:id', sponsor.resendSponsor); //ok
 router.delete('/sponsor/delete/:id', sponsor.deleteSponsor); //ok
-router.post('/sponsors/filter/:magasinId', sponsor.filterSponsorsByVendor);
+router.post('/sponsors/filter/:magasinId', sponsor.filterSponsorsByVendor); //ok
+
+import * as dashboard from '../controller/dashboardController'
+router.get('/vendor/stats/:magasinId', dashboard.getVendorStats);
 
 export default router;

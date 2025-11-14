@@ -631,3 +631,58 @@ export const createLocation = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Erreur lors de la création du produit" });
   }
 };
+
+// produit poulaire /récent pour un vendeur
+export const getPopularProducts = async (req: Request, res: Response) => {
+  try {
+    const { magasinId } = req.params;
+
+    const produits = await prisma.produit.findMany({
+      where: { magasinId },
+      include: {
+        lignePaniers: {
+          include: {
+            panier: {
+              include: { ventes: true }
+            }
+          }
+        },
+        Sponsor: true
+      }
+    });
+
+    // Calcul des ventes validées
+    const produitsAvecVentes = produits.map(p => {
+      let ventes = 0;
+
+      p.lignePaniers.forEach(lp => {
+        const vente = lp.panier.ventes?.[0];
+        if (vente && vente.statut === "payé") {
+          ventes += lp.quantite;
+        }
+      });
+
+      return { ...p, ventes };
+    });
+
+    // Aucun produit vendu
+    if (produitsAvecVentes.every(p => p.ventes === 0)) {
+      const recents = produitsAvecVentes
+        .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
+        .slice(0, 3);
+
+      return res.json({ mode: "recent", products: recents });
+    }
+
+    // Classement populaire
+    const populaires = produitsAvecVentes
+      .sort((a, b) => b.ventes - a.ventes)
+      .slice(0, 3);
+
+    return res.json({ mode: "sales", products: populaires });
+
+  } catch (error) {
+    console.error("Erreur getPopularProducts:", error);
+    return res.status(500).json({ error: "Erreur serveur" });
+  }
+};
