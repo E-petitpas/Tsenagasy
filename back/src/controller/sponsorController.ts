@@ -202,3 +202,109 @@ export const filterSponsorsByVendor = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Erreur lors du filtrage." });
   }
 };
+
+// récupérer tous les sponsors pour admin
+export const getAllSponsors = async (req: Request, res: Response) => {
+  try {
+    const sponsors = await prisma.sponsor.findMany({
+      orderBy: { dateDebut: "desc" },
+      include: {
+        produit: {
+          include: {
+            produitLocation: true,
+            magasin: {
+              include: {
+                proprietaire: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const mapped = sponsors.map(s => ({
+      id: s.id,
+      statut: s.statut,
+      dateDebut: s.dateDebut,
+      dateFin: s.dateFin,
+      
+      produitNom: s.produit?.nom,
+      prix: Number(s.produit?.prix),
+      image: s.produit?.images?.[0],
+
+      magasin: s.produit?.magasin?.nom_Magasin,
+      proprietaireEmail: s.produit?.magasin?.proprietaire?.email,
+
+      produit: s.produit 
+    }));
+
+    return res.status(200).json(mapped);
+
+  } catch (error) {
+    console.error("Erreur récupération sponsors :", error);
+    return res.status(500).json({ error: "Erreur récupération sponsors" });
+  }
+};
+
+// update sponsor par admin
+export const updateSponsorStatusAdmin = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { statut } = req.body;
+
+    if (!["validé", "refusé", "en_attente"].includes(statut)) {
+      return res.status(400).json({ error: "Statut invalide." });
+    }
+
+    const sponsor = await prisma.sponsor.findUnique({
+      where: { id }
+    });
+
+    if (!sponsor) {
+      return res.status(404).json({ error: "Sponsor introuvable." });
+    }
+
+    // Mise à jour
+    const updated = await prisma.sponsor.update({
+      where: { id },
+      data: { statut },
+      include: {
+        produit: {
+          include: {
+            produitLocation: true,
+            magasin: {
+              include: {
+                proprietaire: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const mapped = {
+      id: updated.id,
+      statut: updated.statut,
+      dateDebut: updated.dateDebut,
+      dateFin: updated.dateFin,
+
+      produitNom: updated.produit?.nom,
+      prix: Number(updated.produit?.prix),
+      image: updated.produit?.images?.[0],
+
+      magasin: updated.produit?.magasin?.nom_Magasin,
+      proprietaireEmail: updated.produit?.magasin?.proprietaire?.email,
+
+      produit: updated.produit
+    };
+
+    return res.status(200).json({
+      message: "Statut sponsor mis à jour !",
+      sponsor: mapped
+    });
+
+  } catch (err) {
+    console.error("Erreur updateSponsor:", err);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+};

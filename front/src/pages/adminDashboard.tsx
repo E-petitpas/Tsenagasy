@@ -4,6 +4,7 @@ import AddUserModal from '../components/addUserModal';
 import { UserData } from '../config/authStorage';
 import { API_BASE_URL } from '../config/api';
 import { StatusBadge } from "../components/StatusBadge";
+import { ViewProductModal } from "../components/viewProductModal";
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { toast } from 'sonner';
@@ -25,6 +26,15 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
   const [filterStatus, setFilterStatus] = useState<'en_attente' | 'refuse'>('en_attente');
   const [adhesionRequests, setAdhesionRequests] = useState<any[]>([]);
   const [showRejected, setShowRejected] = useState(false);
+  const [productFilter, setProductFilter] = useState<'en_attente' | 'validé' | 'refusé'>('en_attente');
+  const [adminProducts, setAdminProducts] = useState<any[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [isProductViewModalOpen, setIsProductViewModalOpen] = useState(false);
+  const [filteredAdminProducts, setFilteredAdminProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<{ id: string, nom: string }[]>([]);
+  const [sponsorFilter, setSponsorFilter] = useState<"en_attente" | "validé" | "refusé">("en_attente");
+  const [sponsorsAdmin, setSponsorsAdmin] = useState<any[]>([]);
+  const [filteredSponsors, setFilteredSponsors] = useState<any[]>([]);
 
   // Données de démonstration
   const stats = {
@@ -63,10 +73,25 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
     const options: Intl.DateTimeFormatOptions = { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' };
     return date.toLocaleDateString('fr-FR', options);
   };
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/getCategories`);
+        setCategories(res.data);
+      } catch (err) {
+        console.error("Erreur récupération catégories (admin) :", err);
+      }
+    };
+
+    fetchCategories();
+  }, []);
   
   useEffect(() => {
     fetchAdhesionRequests();
     fetchAccounts();
+    fetchAdminProducts();
+    fetchAdminSponsors();
     const savedTab = sessionStorage.getItem('activeTab') as TabType | null;
     if (savedTab) {
       setActiveTab(savedTab);
@@ -74,9 +99,22 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
   }, []);
 
   useEffect(() => {
+    setFilteredAdminProducts(
+      adminProducts.filter((p) => p.statut === productFilter)
+    );
+  }, [productFilter, adminProducts]);
+  
+  useEffect(() => {
+    setFilteredSponsors(
+      sponsorsAdmin.filter((s: any) => s.statut === sponsorFilter)
+    );
+  }, [sponsorFilter, sponsorsAdmin]);
+  
+  useEffect(() => {
     sessionStorage.setItem('activeTab', activeTab);
   }, [activeTab]);
   
+  //récupérer les demande d'adhésion des magasins
   const fetchAdhesionRequests = async () => {
     try {
       const res = await axios.get(`${API_BASE_URL}/getAdhesion/vendor`);
@@ -86,8 +124,8 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
     }
   };
 
+  //suppression directe du magasin dans la table magasin
   const handleDeleteRejected = async (idMagasin: string, nomMagasin: string) => {
-
     await Swal.fire({
       title: `Confirmation de suppression`,
       text: `Souhaitez-vous supprimer dénitivement le magasin "${nomMagasin}" ?`,
@@ -117,7 +155,7 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
     });
   };
 
-
+  //afficher tous les comptes
   const fetchAccounts = async () => {
     try {
       const adminId = currentUser.id;
@@ -137,14 +175,21 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
     }
   };
 
+  //décision sur magasin
   const handleAdhesionDecision = async (idMagasin: string, decision: 'approuve' | 'refuse') => {
     try {
-      console.log('ato')
+      Swal.fire({
+        title: "Traitement...",
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+      });
+
       await axios.put(`${API_BASE_URL}/adhesionDecision/${idMagasin}`, { 
         statut: decision 
       });
 
       await fetchAdhesionRequests();
+      Swal.close();
       toast.success(`Vendeur ${decision} avec succès !`);
       
       console.log(`Demande ${decision === 'approuve' ? 'approuvée' : 'refusée'} avec succès`);
@@ -154,26 +199,202 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
     }
   };
 
+  //gestion de compte global
   const handleAccept = async (id: number) => {
-  // exemple logique backend
-  await axios.put(`${API_BASE_URL}/users/${id}/activate`);
-  setAccounts(prev => prev.map(a => a.id === id ? { ...a, status: 'active' } : a));
-};
-
-const handleReject = async (id: number) => {
-  await axios.delete(`${API_BASE_URL}/users/${id}`);
-  setAccounts(prev => prev.filter(a => a.id !== id));
-};
-const handleRoleChange = async (id: number, role: string) => {
-  await axios.put(`${API_BASE_URL}/users/${id}`, { role });
-  setAccounts(prev => prev.map(a => a.id === id ? { ...a, role } : a));
+    // exemple logique backend
+    await axios.put(`${API_BASE_URL}/users/${id}/activate`);
+    setAccounts(prev => prev.map(a => a.id === id ? { ...a, status: 'active' } : a));
+  };
+//gestion de compte global
+  const handleReject = async (id: number) => {
+    await axios.delete(`${API_BASE_URL}/users/${id}`);
+    setAccounts(prev => prev.filter(a => a.id !== id));
+  };
+  //gestion de compte global
+  const handleRoleChange = async (id: number, role: string) => {
+    await axios.put(`${API_BASE_URL}/users/${id}`, { role });
+    setAccounts(prev => prev.map(a => a.id === id ? { ...a, role } : a));
   };
   
   const handleLogout = () => {
-    sessionStorage.removeItem('activeTab'); // 🔥 supprime le tab actif sauvegardé
-    onLogout(); // ta logique de déconnexion (redirection, suppression token, etc.)
+    sessionStorage.removeItem('activeTab'); //supprime le tab actif sauvegardé
+    onLogout(); 
   };
   
+  //récupérer les produits pour gestion
+  const fetchAdminProducts = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/admin/products`);
+      const data = res.data || [];
+
+      const formatted = data.map((p: any) => ({
+        ...p,
+        nom: p.nom || p.name,
+        prix: Number(p.prix || p.price),
+        image: p.images?.[0] || "/placeholder.png",
+        status: p.statut,
+        proprietaireEmail: p.proprietaireEmail,
+        magasin: p.magasin,
+        typeProduit: p.typeProduit
+      }));
+      setAdminProducts(formatted);
+
+    } catch (error) {
+      console.error("Erreur chargement produits admin:", error);
+    }
+  };
+
+  // update de statut pour produit
+  const updateProductStatus = async (productId: string, newStatus: "validé" | "refusé") => {
+    try {
+      Swal.fire({
+        title: "Traitement...",
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+      });
+
+      await axios.put(`${API_BASE_URL}/admin/products/decision/${productId}`, {
+        statut: newStatus
+      });
+
+      Swal.close(); 
+      toast.success(`Produit ${newStatus} avec succès !`);
+      fetchAdminProducts();
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la mise à jour du statut.");
+    }
+  };
+
+  // suppression de produit
+  const deleteProduct = async (productId: string, productName: string) => {
+    await Swal.fire({
+      title: "Supprimer le produit ?",
+      text: `Voulez-vous supprimer définitivement "${productName}" ?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Supprimer",
+      cancelButtonText: "Annuler",
+      showLoaderOnConfirm: true,
+      preConfirm: async () => {
+        try {
+          await axios.delete(`${API_BASE_URL}/admin/delete/${productId}`);
+          return true;
+        } catch (error) {
+          Swal.showValidationMessage("Erreur lors de la suppression.");
+          return false;
+        }
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        toast.success("Produit supprimé !");
+        fetchAdminProducts();
+      }
+    });
+  };
+
+  // récupérer les sponsors pour gestion
+  const fetchAdminSponsors = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/admin/sponsors`);
+      const data = res.data || [];
+
+      const formatted = data.map((s: any) => {
+        const p = s.produit || {};
+
+        return {
+          ...s,
+
+          // 🔥 Remapper exactement comme adminProducts
+          produit: {
+            id: p.id,
+            nom: p.nom,
+            price: p.prix,
+            stock: p.stock,
+            category: p.categorieId,
+            images: p.images,
+            tags: p.tags,
+            description: p.descriptions,
+            weight: p.poids,
+            dimensions: p.dimensions,
+            materials: p.materiaux,
+            status: p.statut,
+            typeProduit: p.isLocation ? "location" : "vente",
+            sponsorStatus: s.statut,
+            locationDetails: p.produitLocation ? {
+              caution: p.produitLocation.caution,
+              duree_min: p.produitLocation.duree_min,
+              disponible: p.produitLocation.disponible,
+              typePrix: p.produitLocation.typePrix,
+              lieuRecup: p.produitLocation.lieuRecup
+            } : null
+          },
+
+          // 🔹 Pour le tableau
+          produitNom: p.nom,
+          image: p.images?.[0] || "/placeholder.png",
+          prix: Number(p.prix),
+          magasin: p.magasin?.nom_Magasin,
+          proprietaireEmail: p.magasin?.proprietaire?.email,
+        };
+      });
+
+      setSponsorsAdmin(formatted);
+      setFilteredSponsors(
+        formatted.filter((s: any) => s.statut === sponsorFilter)
+      );
+    } catch (error) {
+      console.error("Erreur chargement sponsors admin:", error);
+    }
+  };
+  
+  // update de status pour sponsor
+  const updateSponsorStatus = async (id: string, statut: "validé" | "refusé") => {
+    try {
+      Swal.fire({ title: "Traitement...", didOpen: () => Swal.showLoading() });
+
+      await axios.put(`${API_BASE_URL}/admin/sponsors/${id}`, { statut });
+
+      Swal.close();
+      toast.success(`Sponsor ${statut} !`);
+
+      fetchAdminSponsors();
+    } catch (error) {
+      toast.error("Erreur lors de la mise à jour.");
+    }
+  };
+
+  // suppression sponsor
+  const deleteSponsor = async (id: string, produitNom: string) => {
+    await Swal.fire({
+      title: "Supprimer le sponsor ?",
+      text: `Voulez-vous supprimer définitivement le sponsor du produit "${produitNom || "ce produit"}" ?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Supprimer",
+      cancelButtonText: "Annuler",
+      showLoaderOnConfirm: true,
+      preConfirm: async () => {
+        try {
+          await axios.delete(`${API_BASE_URL}/admin/delete/sponsors/${id}`);
+          return true;
+        } catch (error) {
+          Swal.showValidationMessage("Erreur lors de la suppression.");
+          return false;
+        }
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        toast.success("Sponsor supprimé !");
+        fetchAdminSponsors();
+      }
+    });
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'overview':
@@ -300,21 +521,23 @@ const handleRoleChange = async (id: number, role: string) => {
           <div className="space-y-6">
             {/* SECTION 1 : DEMANDES  */}
             <div className="section-card">
-              <h3 className="text-xl font-bold mb-4">Demandes d'adhésion des vendeurs</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xl font-bold mb-4">Demandes d'adhésion des vendeurs</h3>
 
-              <div className="mb-4 flex justify-end gap-2">
-                <button
-                  className={`px-4 py-2 rounded-lg font-medium text-sm ${filterStatus === 'en_attente' ? 'bg-[#FFA726] text-white hover:bg-[#FFB74D]' : 'bg-gray-200 text-gray-700'}`}
-                  onClick={() => setFilterStatus('en_attente')}
-                >
-                  En attente
-                </button>
-                <button
-                  className={`px-4 py-2 rounded-lg font-medium text-sm ${filterStatus === 'refuse' ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700'}`}
-                  onClick={() => setFilterStatus('refuse')}
-                >
-                  Refusées
-                </button>
+                <div className="mb-4 flex justify-end gap-2">
+                  <button
+                    className={`px-4 py-2 rounded-lg font-medium text-sm ${filterStatus === 'en_attente' ? 'bg-[#FFA726] text-white hover:bg-[#FFB74D]' : 'bg-gray-200 text-gray-700'}`}
+                    onClick={() => setFilterStatus('en_attente')}
+                  >
+                    En attente
+                  </button>
+                  <button
+                    className={`px-4 py-2 rounded-lg font-medium text-sm ${filterStatus === 'refuse' ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700'}`}
+                    onClick={() => setFilterStatus('refuse')}
+                  >
+                    Refusées
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-x-auto bg-white rounded-lg shadow">
@@ -506,160 +729,359 @@ const handleRoleChange = async (id: number, role: string) => {
           </div>    
         );
 
-      case 'products':
+      case "products":
         return (
           <div className="space-y-6">
-            <div className="bg-white rounded-lg p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-gray-900">Gestion des produits</h3>
-                <button className="bg-[#2D8A47] text-white px-4 py-2 rounded-lg hover:bg-[#245A35] transition-colors flex items-center gap-2">
-                  <Plus size={18} /> Nouveau produit
-                </button>
-              </div>
 
-              <div className="mb-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-                  <input
-                    type="text"
-                    placeholder="Rechercher un produit..."
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D8A47]"
-                  />
+            {/* SECTION : TITRE + FILTRES */}
+            <div className="section-card">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xl font-bold mb-4">Gestion des produits</h3>
+
+                <div className="mb-4 flex justify-end gap-2">
+                  <button
+                    className={`px-4 py-2 rounded-lg font-medium text-sm ${
+                      productFilter === "en_attente"
+                        ? "bg-[#FFA726] text-white hover:bg-[#FFB74D]"
+                        : "bg-gray-200 text-gray-700"
+                    }`}
+                    onClick={() => setProductFilter("en_attente")}
+                  >
+                    En attente
+                  </button>
+
+                  <button
+                    className={`px-4 py-2 rounded-lg font-medium text-sm ${
+                      productFilter === "validé"
+                        ? "bg-[#2D8A47] text-white hover:bg-[#245A35]"
+                        : "bg-gray-200 text-gray-700"
+                    }`}
+                    onClick={() => setProductFilter("validé")}
+                  >
+                    Validés
+                  </button>
+
+                  <button
+                    className={`px-4 py-2 rounded-lg font-medium text-sm ${
+                      productFilter === "refusé"
+                        ? "bg-red-500 text-white hover:bg-red-600"
+                        : "bg-gray-200 text-gray-700"
+                    }`}
+                    onClick={() => setProductFilter("refusé")}
+                  >
+                    Refusés
+                  </button>
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
+              {/* TABLEAU IDENTIQUE À GESTION D’ADHÉSION */}
+              <div className="overflow-x-auto bg-white rounded-lg shadow">
+                <table className="w-full table-auto">
+                  <thead className="bg-gray-100">
                     <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Produit</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Vendeur</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prix</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Stock</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
-                      <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Actions</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Produit</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Propriétaire</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Magasin</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Type</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Prix</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Statut</th>
+                      <th className="px-4 py-2 text-center text-sm font-semibold">Actions</th>
                     </tr>
                   </thead>
+
                   <tbody className="divide-y divide-gray-200">
-                    {recentProducts.map(product => (
-                      <tr key={product.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{product.name}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{product.vendor}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 font-medium">{product.price.toLocaleString()} Ar</td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            product.stock > 10 ? 'bg-[#2D8A47] bg-opacity-10 text-[#2D8A47]' : 'bg-red-100 text-red-600'
-                          }`}>
-                            {product.stock} unités
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="flex items-center gap-1 w-fit px-2 py-1 rounded text-xs font-medium bg-[#2D8A47] bg-opacity-10 text-[#2D8A47]">
-                            <CheckCircle size={12} /> Actif
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-center gap-2">
-                            <button className="text-[#2D8A47] hover:bg-[#2D8A47] hover:bg-opacity-10 p-2 rounded">
-                              <Eye size={16} />
-                            </button>
-                            <button className="text-[#FFA726] hover:bg-[#FFA726] hover:bg-opacity-10 p-2 rounded">
-                              <Edit size={16} />
-                            </button>
-                            <button className="text-red-500 hover:bg-red-50 p-2 rounded">
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
+                    {filteredAdminProducts.length === 0 ? (
+                      <tr className="bg-gray-50">
+                        <td colSpan={6} className="text-center py-3 text-gray-600 text-sm">
+                          Aucun produit trouvé.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      filteredAdminProducts.map((p: any) => (
+                        <tr key={p.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-2">
+                            <div className="flex items-center gap-3">
+                              <img
+                                src={p.image}
+                                className="w-12 h-12 rounded object-cover border"
+                              />
+                              <span className="font-medium">{p.nom}</span>
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-2">{p.proprietaireEmail}</td>
+                          <td className="px-4 py-2">{p.magasin}</td>
+                          <td className="px-4 py-2 capitalize"><StatusBadge status={p.typeProduit}/></td>
+                          <td className="px-4 py-2 font-medium">{p.prix} Ar</td>
+                          <td className="px-4 py-2">
+                            <StatusBadge status={p.statut} />
+                          </td>
+
+                          <td className="px-4 py-2 text-center">
+                            <div className="flex justify-center gap-2">
+
+                              {/* VIEW */}
+                              <button
+                                onClick={() => {
+                                  setSelectedProduct(p);
+                                  setIsProductViewModalOpen(true);
+                                }}
+                                className="p-2 rounded bg-gray-100 hover:bg-gray-200"
+                              >
+                                <Eye size={16} />
+                              </button>
+
+                              {/* --- STATUT : EN ATTENTE --- */}
+                              {p.statut === "en_attente" && (
+                                <>
+                                  {/* Valider */}
+                                  <button
+                                    onClick={() => updateProductStatus(p.id, "validé")}
+                                    className="p-2 bg-green-100 text-green-700 rounded hover:bg-green-200"
+                                  >
+                                    <CheckCircle size={16} />
+                                  </button>
+
+                                  {/* Refuser */}
+                                  <button
+                                    onClick={() => updateProductStatus(p.id, "refusé")}
+                                    className="p-2 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                                  >
+                                    <XCircle size={16} />
+                                  </button>
+                                </>
+                              )}
+
+                              {/* --- STATUT : VALIDÉ --- */}
+                              {p.statut === "validé" && (
+                                <>                                  
+                                  {/* Refuser */}
+                                  <button
+                                    onClick={() => updateProductStatus(p.id, "refusé")}
+                                    className="p-2 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                                  >
+                                    <XCircle size={16} />
+                                  </button>
+
+                                  {/* supprimer */}
+                                  <button
+                                    onClick={() => deleteProduct(p.id, p.nom)}
+                                    className="p-2 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </>
+                              )}
+
+                              {/* --- STATUT : REFUSÉ --- */}
+                              {p.statut === "refusé" && (
+                                <>
+                                  {/* Revalider */}
+                                  <button
+                                    onClick={() => updateProductStatus(p.id, "validé")}
+                                    className="p-2 bg-green-100 text-green-700 rounded hover:bg-green-200"
+                                  >
+                                    <CheckCircle size={16} />
+                                  </button>
+
+                                  {/* Supprimer */}
+                                  <button
+                                    onClick={() => deleteProduct(p.id, p.nom)}
+                                    className="p-2 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
+
+            {/* MODAL DE VISUALISATION */}
+            <ViewProductModal
+              isOpen={isProductViewModalOpen}
+              onClose={() => setIsProductViewModalOpen(false)}
+              product={selectedProduct}
+              categories={categories}
+            />
           </div>
         );
 
-      case 'sponsors':
+      case "sponsors":
         return (
           <div className="space-y-6">
-            <div className="bg-white rounded-lg p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-gray-900">Gestion des sponsors</h3>
-                <button className="bg-[#2D8A47] text-white px-4 py-2 rounded-lg hover:bg-[#245A35] transition-colors flex items-center gap-2">
-                  <Plus size={18} /> Nouveau sponsor
-                </button>
+            <div className="section-card">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xl font-bold mb-4">Gestion des sponsors</h3>
+
+                <div className="mb-4 flex justify-end gap-2">
+                  <button
+                    className={`px-4 py-2 rounded-lg font-medium text-sm ${
+                      sponsorFilter === "en_attente"
+                        ? "bg-[#FFA726] text-white"
+                        : "bg-gray-200 text-gray-700"
+                    }`}
+                    onClick={() => setSponsorFilter("en_attente")}
+                  >
+                    En attente
+                  </button>
+
+                  <button
+                    className={`px-4 py-2 rounded-lg font-medium text-sm ${
+                      sponsorFilter === "validé"
+                        ? "bg-[#2D8A47] text-white"
+                        : "bg-gray-200 text-gray-700"
+                    }`}
+                    onClick={() => setSponsorFilter("validé")}
+                  >
+                    Validés
+                  </button>
+
+                  <button
+                    className={`px-4 py-2 rounded-lg font-medium text-sm ${
+                      sponsorFilter === "refusé"
+                        ? "bg-red-500 text-white"
+                        : "bg-gray-200 text-gray-700"
+                    }`}
+                    onClick={() => setSponsorFilter("refusé")}
+                  >
+                    Refusés
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="bg-[#2D8A47] text-white rounded-lg p-6">
-                  <p className="text-sm opacity-90">Sponsors actifs</p>
-                  <p className="text-3xl font-bold mt-2">{sponsors.filter(s => s.status === 'active').length}</p>
-                </div>
-                <div className="bg-[#FFA726] text-white rounded-lg p-6">
-                  <p className="text-sm opacity-90">Budget total</p>
-                  <p className="text-3xl font-bold mt-2">{(sponsors.reduce((sum, s) => sum + s.budget, 0) / 1000000).toFixed(1)}M Ar</p>
-                </div>
-                <div className="bg-[#FFD700] text-white rounded-lg p-6">
-                  <p className="text-sm opacity-90">En attente</p>
-                  <p className="text-3xl font-bold mt-2">{sponsors.filter(s => s.status === 'pending').length}</p>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
+              <div className="overflow-x-auto bg-white rounded-lg shadow">
+                <table className="w-full table-auto">
+                  <thead className="bg-gray-100">
                     <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Entreprise</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Plan</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Budget</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date de fin</th>
-                      <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Actions</th>
+                      <th className="px-4 py-2 text-left">Produit</th>
+                      <th className="px-4 py-2 text-left">Propriétaire</th>
+                      <th className="px-4 py-2 text-left">Magasin</th>
+                      <th className="px-4 py-2 text-left">Prix</th>
+                      <th className="px-4 py-2 text-left">Dates</th>
+                      <th className="px-4 py-2 text-left">Statut</th>
+                      <th className="px-4 py-2 text-center">Actions</th>
                     </tr>
                   </thead>
+
                   <tbody className="divide-y divide-gray-200">
-                    {sponsors.map(sponsor => (
-                      <tr key={sponsor.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{sponsor.company}</td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            sponsor.plan === 'Premium' ? 'bg-[#FFD700] bg-opacity-20 text-[#FFA726]' : 'bg-blue-100 text-blue-600'
-                          }`}>
-                            {sponsor.plan}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 font-medium">{(sponsor.budget / 1000000).toFixed(1)}M Ar</td>
-                        <td className="px-4 py-3">
-                          <span className={`flex items-center gap-1 w-fit px-2 py-1 rounded text-xs font-medium ${
-                            sponsor.status === 'active' ? 'bg-[#2D8A47] bg-opacity-10 text-[#2D8A47]' : 'bg-[#FFA726] bg-opacity-10 text-[#FFA726]'
-                          }`}>
-                            {sponsor.status === 'active' ? <CheckCircle size={12} /> : <XCircle size={12} />}
-                            {sponsor.status === 'active' ? 'Actif' : 'En attente'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{sponsor.endDate}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-center gap-2">
-                            <button className="text-[#2D8A47] hover:bg-[#2D8A47] hover:bg-opacity-10 p-2 rounded">
-                              <Eye size={16} />
-                            </button>
-                            <button className="text-[#FFA726] hover:bg-[#FFA726] hover:bg-opacity-10 p-2 rounded">
-                              <Edit size={16} />
-                            </button>
-                            <button className="text-red-500 hover:bg-red-50 p-2 rounded">
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
+                    {filteredSponsors.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="text-center py-3 text-gray-600">
+                          Aucun sponsor trouvé.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      filteredSponsors.map((s) => (
+                        <tr key={s.id}>
+                          <td className="px-4 py-2">
+                            <div className="flex items-center gap-3">
+                              <img src={s.image} className="w-12 h-12 rounded border" />
+                              <span>{s.produitNom}</span>
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-2">{s.proprietaireEmail}</td>
+                          <td className="px-4 py-2">{s.magasin}</td>
+                          <td className="px-4 py-2">{s.prix} Ar</td>
+                          <td className="px-4 py-2">
+                            {s.dateDebut ? new Date(s.dateDebut).toLocaleDateString("fr-FR") : "—"} →
+                            {s.dateFin ? new Date(s.dateFin).toLocaleDateString("fr-FR") : "—"}
+                          </td>
+
+                          <td className="px-4 py-2">
+                            <StatusBadge status={s.statut} />
+                          </td>
+
+                          <td className="px-4 py-2 text-center">
+                            <div className="flex justify-center gap-2">
+
+                              {/* View */}
+                              <button
+                                onClick={() => {
+                                  setSelectedProduct(s.produit);
+                                  setIsProductViewModalOpen(true);
+                                }}
+                                className="p-2 bg-gray-100 rounded hover:bg-gray-200"
+                              >
+                                <Eye size={16} />
+                              </button>
+
+                              {s.statut === "en_attente" && (
+                                <>
+                                  <button
+                                    onClick={() => updateSponsorStatus(s.id, "validé")}
+                                    className="p-2 bg-green-100 text-green-700 rounded"
+                                  >
+                                    <CheckCircle size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => updateSponsorStatus(s.id, "refusé")}
+                                    className="p-2 bg-red-100 text-red-700 rounded"
+                                  >
+                                    <XCircle size={16} />
+                                  </button>
+                                </>
+                              )}
+
+                              {s.statut === "validé" && (
+                                <>
+                                  <button
+                                    onClick={() => updateSponsorStatus(s.id, "refusé")}
+                                    className="p-2 bg-red-100 text-red-700 rounded"
+                                  >
+                                    <XCircle size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteSponsor(s.id, s.produitNom)}
+                                    className="p-2 bg-red-100 text-red-700 rounded"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </>
+                              )}
+
+                              {s.statut === "refusé" && (
+                                <>
+                                  <button
+                                    onClick={() => updateSponsorStatus(s.id, "validé")}
+                                    className="p-2 bg-green-100 text-green-700 rounded"
+                                  >
+                                    <CheckCircle size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteSponsor(s.id, s.produitNom)}
+                                    className="p-2 bg-red-100 text-red-700 rounded"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
+
+            <ViewProductModal
+              isOpen={isProductViewModalOpen}
+              onClose={() => setIsProductViewModalOpen(false)}
+              product={selectedProduct}
+              categories={categories}
+            />
           </div>
         );
+
 
       case 'analytics':
         return (
@@ -775,7 +1197,7 @@ const handleRoleChange = async (id: number, role: string) => {
       </header>
 
         {/* Zone de contenu */}
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="flex-1 p-8">
           {renderContent()}
         </main>
       </div>

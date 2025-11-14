@@ -686,3 +686,139 @@ export const getPopularProducts = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Erreur serveur" });
   }
 };
+
+// affichage de produit dans admin
+export const getAllProductsForAdmin = async (req: Request, res: Response) => {
+  try {
+    const produits = await prisma.produit.findMany({
+      include: {
+        produitLocation: true,
+        Sponsor: true,
+        magasin: {
+          include: {
+            proprietaire: true
+          }
+        }
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    if (!produits || produits.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    const mappedProducts = produits.map(p => ({
+      id: p.id,
+      name: p.nom,
+      price: p.prix,
+      stock: p.stock,
+      category: p.categorieId,
+      images: p.images,
+      tags: p.tags,
+      description: p.descriptions,
+      weight: p.poids,
+      dimensions: p.dimensions,
+      materials: p.materiaux,
+      statut: p.statut,
+      typeProduit: p.isLocation ? "location" : "vente",
+      createdAt: p.createdAt,
+      locationDetails: p.produitLocation
+        ? {
+            caution: p.produitLocation.caution,
+            duree_min: p.produitLocation.duree_min,
+            disponible: p.produitLocation.disponible,
+            typePrix: p.produitLocation.typePrix,
+            lieuRecup: p.produitLocation.lieuRecup,
+          }
+        : null,
+      sponsorisé: !!p.Sponsor,
+      sponsorStatus: p.Sponsor ? p.Sponsor.statut : null,
+      magasin: p.magasin?.nom_Magasin,
+      proprietaireEmail: p.magasin?.proprietaire?.email
+    }));
+
+    return res.status(200).json(mappedProducts);
+
+  } catch (error) {
+    console.error("Erreur getAllProductsForAdmin :", error);
+    return res.status(500).json({ error: "Erreur lors de la récupération des produits" });
+  }
+};
+
+// Update du statut (validé / refusé)
+export const updateProductStatus = async (req: Request, res: Response) => {
+  try {
+    const { productId } = req.params;
+    const { statut } = req.body;
+
+    if (!productId || !statut) {
+      return res.status(400).json({ error: "ID produit et statut requis." });
+    }
+
+    if (!["validé", "refusé", "en_attente"].includes(statut)) {
+      return res.status(400).json({ error: "Statut invalide." });
+    }
+
+    // Update du statut
+    await prisma.produit.update({
+      where: { id: productId },
+      data: { statut }
+    });
+
+    const p = await prisma.produit.findUnique({
+      where: { id: productId },
+      include: {
+        produitLocation: true,
+        Sponsor: true,
+        magasin: {
+          include: {
+            proprietaire: true
+          }
+        }
+      }
+    });
+
+    if (!p) {
+      return res.status(404).json({ error: "Produit introuvable après mise à jour." });
+    }
+
+    const mappedProduct = {
+      id: p.id,
+      name: p.nom,
+      price: p.prix,
+      stock: p.stock,
+      category: p.categorieId,
+      images: p.images,
+      tags: p.tags,
+      description: p.descriptions,
+      weight: p.poids,
+      dimensions: p.dimensions,
+      materials: p.materiaux,
+      statut: p.statut,
+      typeProduit: p.isLocation ? "location" : "vente",
+      createdAt: p.createdAt,
+      locationDetails: p.produitLocation
+        ? {
+            caution: p.produitLocation.caution,
+            duree_min: p.produitLocation.duree_min,
+            disponible: p.produitLocation.disponible,
+            typePrix: p.produitLocation.typePrix,
+            lieuRecup: p.produitLocation.lieuRecup,
+          }
+        : null,
+      sponsorisé: !!p.Sponsor,
+      sponsorStatus: p.Sponsor ? p.Sponsor.statut : null,
+      magasin: p.magasin?.nom_Magasin,
+      proprietaireEmail: p.magasin?.proprietaire?.email
+    };
+
+    return res.status(200).json({
+      message: "Statut mis à jour avec succès.",
+      produit: mappedProduct
+    });
+
+  } catch (error) {
+    console.error("Erreur updateProductStatus:", error);
+    return res.status(500).json({ error: "Erreur serveur lors de la mise à jour du statut." });
+  }
+};

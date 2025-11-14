@@ -922,7 +922,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                               <div className="flex items-center justify-center w-8 h-8">
                                 <span className="text-gray-400 text-lg font-semibold">—</span>
                               </div>
-                            ) : product.status === "brouillon" ? (
+                            ) : product.status !== "validé" ? (
                               <div className="flex items-center justify-center w-8 h-8">
                                 <span className="text-gray-400 text-lg font-semibold">—</span>
                               </div>

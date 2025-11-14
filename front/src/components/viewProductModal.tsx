@@ -35,7 +35,7 @@ export const ViewProductModal: React.FC<ViewProductModalProps> = ({
 
         {/* 🔹 Description */}
         {product.description && (
-          <p className="text-gray-800 text-sm leading-relaxed mb-2">
+          <p className="text-gray-800 text-lg leading-relaxed mb-1 font-medium">
             {product.description}
           </p>
         )}
