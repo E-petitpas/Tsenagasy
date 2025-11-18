@@ -35,16 +35,12 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
   const [sponsorFilter, setSponsorFilter] = useState<"en_attente" | "validé" | "refusé">("en_attente");
   const [sponsorsAdmin, setSponsorsAdmin] = useState<any[]>([]);
   const [filteredSponsors, setFilteredSponsors] = useState<any[]>([]);
-
-  // Données de démonstration
-  const stats = {
-    totalUsers: 1247,
-    totalVendors: 89,
-    totalProducts: 456,
-    totalSponsors: 12,
-    revenue: 45600000,
-    activeOrders: 34
-  };
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    activeUsers: 0,
+    totalProducts: 0,
+    totalSponsors: 0
+  });
 
   const recentAccounts = [
     { id: 1, name: 'Rakoto Jean', email: 'rakoto@email.mg', role: 'client', status: 'active', joinDate: '2024-10-15' },
@@ -56,12 +52,6 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
     { id: 1, name: 'Panier artisanal', vendor: 'Rakoto Artisanat', price: 25000, stock: 15, status: 'active' },
     { id: 2, name: 'Vanille de Madagascar', vendor: 'Épices du Sud', price: 45000, stock: 8, status: 'active' },
     { id: 3, name: 'Lamba traditionnel', vendor: 'Tissus Malgaches', price: 85000, stock: 3, status: 'low_stock' },
-  ];
-
-  const sponsors = [
-    { id: 1, company: 'Telma Madagascar', plan: 'Premium', budget: 5000000, status: 'active', endDate: '2025-03-15' },
-    { id: 2, company: 'Jirama', plan: 'Standard', budget: 2000000, status: 'active', endDate: '2025-01-20' },
-    { id: 3, company: 'Air Madagascar', plan: 'Premium', budget: 4500000, status: 'pending', endDate: '2025-06-30' },
   ];
 
   useEffect(() => {
@@ -88,6 +78,7 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
   }, []);
   
   useEffect(() => {
+    fetchStats();
     fetchAdhesionRequests();
     fetchAccounts();
     fetchAdminProducts();
@@ -260,6 +251,7 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
       Swal.close(); 
       toast.success(`Produit ${newStatus} avec succès !`);
       fetchAdminProducts();
+      fetchStats();
     } catch (error) {
       console.error(error);
       toast.error("Erreur lors de la mise à jour du statut.");
@@ -291,6 +283,7 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
       if (result.isConfirmed) {
         toast.success("Produit supprimé !");
         fetchAdminProducts();
+        fetchStats();
       }
     });
   };
@@ -342,6 +335,7 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
       });
 
       setSponsorsAdmin(formatted);
+      fetchStats();
       setFilteredSponsors(
         formatted.filter((s: any) => s.statut === sponsorFilter)
       );
@@ -361,6 +355,7 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
       toast.success(`Sponsor ${statut} !`);
 
       fetchAdminSponsors();
+      fetchStats();
     } catch (error) {
       toast.error("Erreur lors de la mise à jour.");
     }
@@ -391,8 +386,19 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
       if (result.isConfirmed) {
         toast.success("Sponsor supprimé !");
         fetchAdminSponsors();
+        fetchStats();
       }
     });
+  };
+
+  // pour statistiques du dashboard
+  const fetchStats = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/admin/stats`);
+      setStats(res.data);
+    } catch (error) {
+      console.error("Erreur chargement stats :", error);
+    }
   };
 
   const renderContent = () => {
@@ -400,67 +406,72 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
       case 'overview':
         return (
           <div className="space-y-6">
-            {/* Statistiques principales */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white rounded-lg p-6 border-l-4 border-[#2D8A47]">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-gray-600 text-sm">Utilisateurs totaux</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalUsers}</p>
-                    <p className="text-[#2D8A47] text-sm mt-2 flex items-center gap-1">
-                      <TrendingUp size={14} /> +12% ce mois
-                    </p>
-                  </div>
-                  <div className="bg-[#2D8A47] bg-opacity-10 p-3 rounded-lg">
-                    <Users className="text-[#2D8A47]" size={24} />
+              {/* Statistiques principales */}
+            
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                {/* Utilisateurs */}
+                <div
+                  className="rounded-xl p-6 shadow-md cursor-pointer text-white"
+                  style={{ backgroundColor: "#3B82F6" }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-sm opacity-90">Utilisateurs totaux</p>
+                      <p className="text-3xl font-bold mt-2">{stats.totalUsers}</p>
+                    </div>
+                    <div className="bg-white bg-opacity-20 p-3 rounded-lg">
+                      <Users size={24} color="#3B82F6" />
+                    </div>
                   </div>
                 </div>
-              </div>
+              
+                {/* Users actifs */}
+                <div
+                  className="rounded-xl p-6 shadow-md cursor-pointer text-white"
+                  style={{ backgroundColor: "#8B5CF6" }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-sm opacity-90">Utilisateurs actifs</p>
+                      <p className="text-3xl font-bold mt-2">{stats.activeUsers}</p>
+                    </div>
+                    <div className="bg-white bg-opacity-20 p-3 rounded-lg">
+                      <Users size={24} color="#8B5CF6" />
+                    </div>
+                  </div>
+                </div>
 
-              <div className="bg-white rounded-lg p-6 border-l-4 border-[#FFA726]">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-gray-600 text-sm">Vendeurs actifs</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalVendors}</p>
-                    <p className="text-[#FFA726] text-sm mt-2 flex items-center gap-1">
-                      <TrendingUp size={14} /> +8% ce mois
-                    </p>
-                  </div>
-                  <div className="bg-[#FFA726] bg-opacity-10 p-3 rounded-lg">
-                    <Users className="text-[#FFA726]" size={24} />
+                {/* Produits */}
+                <div
+                  className="rounded-xl p-6 shadow-md cursor-pointer text-white"
+                  style={{ backgroundColor: "#F59E0B" }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-sm opacity-90">Produits validés</p>
+                      <p className="text-3xl font-bold mt-2">{stats.totalProducts}</p>
+                    </div>
+                    <div className="bg-white bg-opacity-20 p-3 rounded-lg">
+                      <Package size={24} color="#F59E0B" />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="bg-white rounded-lg p-6 border-l-4 border-[#FFD700]">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-gray-600 text-sm">Produits</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalProducts}</p>
-                    <p className="text-[#FFD700] text-sm mt-2 flex items-center gap-1">
-                      <TrendingUp size={14} /> +23% ce mois
-                    </p>
+                {/* Sponsors */}
+                <div
+                  className="rounded-xl p-6 shadow-md cursor-pointer text-white"
+                  style={{ backgroundColor: "#FBBF24" }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-sm opacity-90">Sponsors en cours</p>
+                      <p className="text-3xl font-bold mt-2">{stats.totalSponsors}</p>
+                    </div>
+                    <div className="bg-white bg-opacity-20 p-3 rounded-lg">
+                      <Star size={24} color="#FBBF24" />
+                    </div>
                   </div>
-                  <div className="bg-[#FFD700] bg-opacity-10 p-3 rounded-lg">
-                    <Package className="text-[#FFD700]" size={24} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg p-6 border-l-4 border-[#2D8A47]">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-gray-600 text-sm">Revenu mensuel</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">{(stats.revenue / 1000000).toFixed(1)}M Ar</p>
-                    <p className="text-[#2D8A47] text-sm mt-2 flex items-center gap-1">
-                      <TrendingUp size={14} /> +15% ce mois
-                    </p>
-                  </div>
-                  <div className="bg-[#2D8A47] bg-opacity-10 p-3 rounded-lg">
-                    <BarChart3 className="text-[#2D8A47]" size={24} />
-                  </div>
-                </div>
-              </div>
+                </div>    
             </div>
 
             {/* Activité récente */}

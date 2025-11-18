@@ -41,5 +41,6 @@ router.delete('/admin/delete/sponsors/:id', sponsor.deleteSponsor); //ok
 
 import * as dashboard from '../controller/dashboardController'
 router.get('/vendor/stats/:magasinId', dashboard.getVendorStats);
+router.get('/admin/stats', dashboard.getAdminStats);
 
 export default router;

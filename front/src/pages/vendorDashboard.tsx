@@ -5,6 +5,9 @@ import {
   Trash2, 
   Eye, 
   RefreshCw,
+  Boxes,
+  Star,
+  ShoppingCart,
   DollarSign, 
   Package, 
   Users, 
@@ -632,7 +635,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                 <CardContent>
                   <div className="flex items-center">
                     <div className="bg-white bg-opacity-20 p-2 rounded-lg mr-3">
-                      <TrendingUp className="h-6 w-6 text-white" />
+                      <Boxes className="h-6 w-6" style={{ color: "#3B82F6" }}/>
                     </div>
                     <div>
                       <div className="text-3xl font-bold">{stats.activeProducts}</div>
@@ -646,7 +649,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
 
               <Card onClick={() => setActiveTab("sponsor")}
                 style={{
-                backgroundColor: "#FACC15",   // jaune solide
+                backgroundColor: "#F7C600",   // jaune solide
                 borderRadius: "12px",
                 padding: "8px",
                 color: "#FFFF"
@@ -657,7 +660,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                 <CardContent>
                   <div className="flex items-center">
                     <div className="bg-white bg-opacity-20 p-2 rounded-lg mr-3">
-                      <TrendingUp className="h-6 w-6 text-white" />
+                      <Star className="h-6 w-6" style={{ color: "#F7C600" }}/>
                     </div>
                     <div>
                       <div className="text-3xl font-bold">{stats.validSponsors}</div>
@@ -676,7 +679,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                 <CardContent>
                   <div className="flex items-center">
                     <div className="bg-white bg-opacity-20 p-2 rounded-lg mr-3">
-                      <Package className="h-6 w-6 text-white" />
+                      <ShoppingCart className="h-6 w-6" style={{ color: "#FF9800" }}/>
                     </div>
                     <div>
                       <div className="text-3xl font-bold">{stats.totalOrders}</div>
