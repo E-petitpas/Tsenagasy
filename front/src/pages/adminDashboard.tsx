@@ -10,7 +10,7 @@ import Swal from 'sweetalert2';
 import { toast } from 'sonner';
 import '../styles/AdminDashboard.css';
 
-type TabType = 'overview' | 'accounts' | 'products' | 'sponsors' | 'analytics' | 'settings';
+type TabType = 'overview' | 'accounts' | 'products' | 'sponsors';
 
 type AdminDashboardProps = {
   currentUser: UserData;
@@ -401,6 +401,9 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
     }
   };
 
+  const hasPendingAdhesions = adhesionRequests.some(r => r.statut === "en_attente");
+  const hasPendingProducts = adminProducts.some(p => p.statut === "en_attente");
+  
   const renderContent = () => {
     switch (activeTab) {
       case 'overview':
@@ -412,7 +415,7 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
                 {/* Utilisateurs */}
                 <div
                   className="rounded-xl p-6 shadow-md cursor-pointer text-white"
-                  style={{ backgroundColor: "#3B82F6" }}
+                  style={{ backgroundColor: "#3B82F6" }} onClick={() => setActiveTab("accounts")}
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -428,7 +431,7 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
                 {/* Users actifs */}
                 <div
                   className="rounded-xl p-6 shadow-md cursor-pointer text-white"
-                  style={{ backgroundColor: "#8B5CF6" }}
+                  style={{ backgroundColor: "#8B5CF6" }} onClick={() => setActiveTab("accounts")}
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -444,7 +447,7 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
                 {/* Produits */}
                 <div
                   className="rounded-xl p-6 shadow-md cursor-pointer text-white"
-                  style={{ backgroundColor: "#F59E0B" }}
+                  style={{ backgroundColor: "#F59E0B" }} onClick={() => setActiveTab("products")}
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -460,7 +463,7 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
                 {/* Sponsors */}
                 <div
                   className="rounded-xl p-6 shadow-md cursor-pointer text-white"
-                  style={{ backgroundColor: "#FBBF24" }}
+                  style={{ backgroundColor: "#FBBF24" }} onClick={() => setActiveTab("sponsors")}
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -476,51 +479,78 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
 
             {/* Activité récente */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-lg p-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Comptes récents</h3>
+              {/* Demandes d’adhésion récentes */}
+              <div className={`bg-white rounded-lg p-6 transition-all ${
+                hasPendingAdhesions ? "border-l-4 border-yellow-400 shadow-md" : "border border-gray-200"
+              }`}>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Nouvelles demandes d’adhésion</h3>
+
                 <div className="space-y-3">
-                  {recentAccounts.map(account => (
-                    <div key={account.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[#2D8A47] bg-opacity-10 flex items-center justify-center">
-                          <Users className="text-[#2D8A47]" size={18} />
+                  {adhesionRequests
+                    .filter((r) => r.statut === "en_attente")
+                    .slice(0, 4)
+                    .map((req) => (
+                      <div key={req.idMagasin} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        onClick={() => {
+                          setActiveTab("accounts");
+                          setFilterStatus("en_attente");
+                        }}>
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <Users className="text-blue-500" size={18} />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">{req.nomMagasin}</p>
+                            <p className="text-sm text-gray-500">{req.proprietaire.email}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900">{account.name}</p>
-                          <p className="text-sm text-gray-500">{account.email}</p>
-                        </div>
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-600">
+                          En attente
+                        </span>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        account.status === 'active' ? 'bg-[#2D8A47] bg-opacity-10 text-[#2D8A47]' : 'bg-[#FFA726] bg-opacity-10 text-[#FFA726]'
-                      }`}>
-                        {account.status === 'active' ? 'Actif' : 'En attente'}
-                      </span>
-                    </div>
-                  ))}
+                    ))}
+
+                  {adhesionRequests.filter(r => r.statut === "en_attente").length === 0 && (
+                    <p className="text-sm text-gray-500 text-center">Aucune demande en attente.</p>
+                  )}
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg p-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Produits récents</h3>
+              {/* Produits en attente récents */}
+              <div className={`bg-white rounded-lg p-6 transition-all ${
+                hasPendingProducts ? "border-l-4 border-orange-400 shadow-md" : "border border-gray-200"
+              }`}>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Produits en attente de validation</h3>
+
                 <div className="space-y-3">
-                  {recentProducts.map(product => (
-                    <div key={product.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[#FFD700] bg-opacity-20 flex items-center justify-center">
-                          <Package className="text-[#FFD700]" size={18} />
+                  {adminProducts
+                    .filter((p) => p.statut === "en_attente")
+                    .slice(0, 4)
+                    .map((product) => (
+                      <div key={product.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                      onClick={() => {
+                        setActiveTab("products");
+                        setProductFilter("en_attente");
+                      }}>
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={product.image}
+                            className="w-10 h-10 rounded object-cover border"
+                          />
+                          <div>
+                            <p className="font-medium text-gray-900">{product.nom}</p>
+                            <p className="text-sm text-gray-500">{product.prix} Ar</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900">{product.name}</p>
-                          <p className="text-sm text-gray-500">{product.price.toLocaleString()} Ar</p>
-                        </div>
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-600">
+                          En attente
+                        </span>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        product.status === 'active' ? 'bg-[#2D8A47] bg-opacity-10 text-[#2D8A47]' : 'bg-red-100 text-red-600'
-                      }`}>
-                        Stock: {product.stock}
-                      </span>
-                    </div>
-                  ))}
+                    ))}
+
+                  {adminProducts.filter(p => p.statut === "en_attente").length === 0 && (
+                    <p className="text-sm text-gray-500 text-center">Aucun produit en attente.</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -1093,43 +1123,6 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
           </div>
         );
 
-
-      case 'analytics':
-        return (
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-6">Analytiques et rapports</h3>
-              <div className="text-center py-12">
-                <BarChart3 className="mx-auto text-gray-300" size={64} />
-                <p className="text-gray-500 mt-4">Graphiques et statistiques à venir</p>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'settings':
-        return (
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-6">Paramètres administrateur</h3>
-              <div className="space-y-4">
-                <div className="border-b pb-4">
-                  <h4 className="font-semibold text-gray-900 mb-2">Paramètres généraux</h4>
-                  <p className="text-gray-600 text-sm">Configuration de la plateforme</p>
-                </div>
-                <div className="border-b pb-4">
-                  <h4 className="font-semibold text-gray-900 mb-2">Sécurité</h4>
-                  <p className="text-gray-600 text-sm">Gestion des accès et permissions</p>
-                </div>
-                <div className="border-b pb-4">
-                  <h4 className="font-semibold text-gray-900 mb-2">Notifications</h4>
-                  <p className="text-gray-600 text-sm">Configuration des alertes système</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-
       default:
         return null;
     }
@@ -1155,8 +1148,6 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
               { id: 'accounts', label: 'Comptes', icon: <Users size={20} /> },
               { id: 'products', label: 'Produits', icon: <Package size={20} /> },
               { id: 'sponsors', label: 'Sponsors', icon: <Star size={20} /> },
-              { id: 'analytics', label: 'Analytiques', icon: <TrendingUp size={20} /> },
-              { id: 'settings', label: 'Paramètres', icon: <Settings size={20} /> },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -1195,8 +1186,6 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
               {activeTab === 'accounts' && "Gestion des comptes"}
               {activeTab === 'products' && "Gestion des produits"}
               {activeTab === 'sponsors' && "Gestion des sponsors"}
-              {activeTab === 'analytics' && "Analytiques et rapports"}
-              {activeTab === 'settings' && "Paramètres"}
             </h2>
             <p>Plateforme d'administration Tsena.mg</p>
           </div>
