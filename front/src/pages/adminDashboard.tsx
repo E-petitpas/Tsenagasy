@@ -1156,8 +1156,10 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
                   activeTab === tab.id ? 'active' : ''
                 }`}
               >
-                {tab.icon}
                 <span>{tab.label}</span>
+                <div className={`ml-auto ${activeTab === tab.id ? "icon-active" : "icon-inactive"}`}>
+                    {tab.icon}
+                </div>
               </button>
             ))}
           </div>

@@ -8,6 +8,7 @@ import Home from './pages/home';
 import ClientDashboardPage from './pages/clientDashboard';
 import VendorDashboard from './pages/vendorDashboard';
 import AdminDashboard from './pages/adminDashboard';
+import UserDashboard from './pages/UserDashboard';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
@@ -109,7 +110,18 @@ export default function App() {
                   <Home {...sharedProps} />
                 )} 
           />
-          <Route 
+          
+          {/* ROUTE COMMUNE CLIENT + VENDEUR */}
+          <Route
+            path="/dashboard/*"
+            element={
+              currentUser
+                ? <UserDashboard currentUser={currentUser} onLogout={handleLogout} />
+                : <Navigate to="/" replace />
+            }
+          />
+          
+          {/* <Route 
             path="/client/*" 
             element={
               currentUser?.role === 'client' 
@@ -124,7 +136,7 @@ export default function App() {
                   ? <VendorDashboard currentUser={currentUser as UserData & { type: "vendor" }} onLogout={handleLogout} /> 
                   : <Navigate to="/" replace />
               }
-            /> }
+            /> } */}
           <Route
             path="/admin/*"
             element={

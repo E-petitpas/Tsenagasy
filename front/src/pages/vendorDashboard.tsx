@@ -29,6 +29,7 @@ import { ModifyProductModal } from '../components/modifyProductModal';
 import { ViewProductModal } from "../components/viewProductModal";
 import { NewLocationModal } from '../components/NewLocationModal';
 import { StatusBadge } from "../components/StatusBadge";
+import "../styles/AdminDashboard.css";
 import { toast } from 'sonner';
 import { UserData } from '../config/authStorage';
 import { API_BASE_URL } from '../config/api';
@@ -38,6 +39,15 @@ import Swal from 'sweetalert2';
 interface VendorDashboardProps {
   currentUser: UserData & { type: "vendor" };
   onLogout: () => void;
+  activeView: string;
+  onChangeView: (
+    view:
+      | "vendor"
+      | "vendor-products"
+      | "vendor-sponsors"
+      | "vendor-orders"
+      | "vendor-analytics"
+  ) => void;
 }
 
 const mockStats = {
@@ -77,10 +87,7 @@ const mockOrders = [
   }
 ];
 
-export default function VendorDashboard({ currentUser, onLogout }: VendorDashboardProps){
-  const [activeTab, setActiveTab] = useState(() => {
-    return sessionStorage.getItem('vendorActiveTab') || 'overview';
-  });
+export default function VendorDashboard({ currentUser, onLogout, activeView, onChangeView }: VendorDashboardProps){
   const [searchTerm, setSearchTerm] = useState('');
   const [orders, setOrders] = useState(mockOrders);
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
@@ -100,12 +107,22 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
   const [selectedSponsorStatus, setSelectedSponsorStatus] = useState("all");
   const [popularProducts, setPopularProducts] = useState<any[]>([]);
   const [popularMode, setPopularMode] = useState<"recent" | "sales">("sales");
+  const [instantSearch, setInstantSearch] = useState(false);
+  const [autoFilterValid, setAutoFilterValid] = useState(false);
+  const [autoFilterSponsor, setAutoFilterSponsor] = useState(false);
   const [stats, setStats] = useState({
     totalOrders: 0,
     activeProducts: 0,
     validSponsors: 0
   });
   
+  const currentView =
+    activeView === "vendor" ? "overview" :
+    activeView === "vendor-products" ? "products" :
+    activeView === "vendor-sponsors" ? "sponsor" :
+    activeView === "vendor-orders" ? "orders" :
+    activeView === "vendor-analytics" ? "analytics" :
+    "overview";
 
   useEffect(() => {
     if (selectedProduct) {
@@ -120,7 +137,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
     if (currentUser?.magasinId) {
       fetchPopularProducts();
     }
-  }, [currentUser]);
+  }, []);
   
   useEffect(() => {
     const fetchCategories = async () => {
@@ -135,6 +152,29 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
   }, []);
 
   useEffect(() => {
+    if (currentView === "products" && autoFilterValid) {
+      const filtered = products.filter(p => p.status === "validé");
+      setFilteredProducts(filtered);
+      setAutoFilterValid(false); 
+    }
+  }, [currentView, products, autoFilterValid]);
+
+  useEffect(() => {
+    if (currentView === "sponsor" && autoFilterSponsor) {
+      const filtered = sponsors.filter(s => s.statut === "validé");
+      setFilteredSponsors(filtered);
+      setSelectedSponsorStatus("validé");
+      setAutoFilterSponsor(false);
+    }
+  }, [currentView, sponsors, autoFilterSponsor]);
+
+  useEffect(() => {
+    if (instantSearch) {
+      setDebouncedSearchTerm(searchTerm);
+      setInstantSearch(false);
+    return;
+    }
+    
     const handler = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
     }, 1000); 
@@ -142,7 +182,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
     return () => {
       clearTimeout(handler);
     };
-  }, [searchTerm]);
+  }, [searchTerm, instantSearch]);
 
   // lancer la recherche
   useEffect(() => {
@@ -159,12 +199,6 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
       setFilteredProducts(filtered);
     }
   }, [debouncedSearchTerm, products]);
-
-  // Changement d'onglet
-  const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-    sessionStorage.setItem('vendorActiveTab', tab);
-  };
 
   const fetchProducts = async () => {
     try {
@@ -554,81 +588,13 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
     }
   };
   
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header avec style cohérent */}
-      <header className="bg-white border-b shadow-sm">
-        {/* Barre de retour */}
-        <div className="bg-gray-50 border-b">
-          <div className="container mx-auto px-4 py-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => window.history.back()}
-              className="text-[#2D8A47] hover:text-[#245A35] hover:bg-green-50"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Retour à l'accueil Tsena.mg
-            </Button>
-          </div>
-        </div>
-        
-        {/* En-tête principal */}
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-[#2D8A47] rounded-lg flex items-center justify-center">
-                <span className="text-white text-xl">🏪</span>
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Espace Vendeur</h1>
-                <p className="text-gray-600">Gérez votre boutique sur Tsena.mg</p>
-              </div>
-            </div>
-            
-            <div className="flex flex-wrap gap-3">
-              <Button variant="outline" onClick={handleExportData} className="border-gray-300">
-                <Download className="h-4 w-4 mr-2" />
-                Exporter
-              </Button>
-              <Button 
-                className="bg-[#2D8A47] hover:bg-[#245A35] text-white"
-                onClick={() => setIsNewProductModalOpen(true)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Nouveau produit
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  sessionStorage.clear(); 
-                  onLogout();             
-                }}
-                className="bg-red-500 hover:bg-red-600 text-white"
-              >
-                Déconnexion
-              </Button>
-            </div>
-          </div>
-        </div>
-        
-
-      </header>
-
-      <div className="container mx-auto px-4 py-8">
-        <Tabs value={activeTab} onValueChange={handleTabChange}>
-          <TabsList className="grid w-full grid-cols-5 bg-white border shadow-sm mb-8">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-[#2D8A47] data-[state=active]:text-white">Vue d'ensemble</TabsTrigger>
-            <TabsTrigger value="products" className="data-[state=active]:bg-[#2D8A47] data-[state=active]:text-white">Produits</TabsTrigger>
-            <TabsTrigger value="sponsor" className="data-[state=active]:bg-[#2D8A47] data-[state=active]:text-white">Sponsors</TabsTrigger>
-            <TabsTrigger value="orders" className="data-[state=active]:bg-[#2D8A47] data-[state=active]:text-white">Commandes</TabsTrigger>
-            <TabsTrigger value="analytics" className="data-[state=active]:bg-[#2D8A47] data-[state=active]:text-white">Analyses</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview">
-            {/* Stats Cards */}
+  // contenu de vue d'ensemble
+  const renderOverview = () => {
+    return (
+      <>
+        {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <Card className="!bg-transparent bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0 shadow-lg" onClick={() => setActiveTab("products")}>
+          <Card className="!bg-transparent bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0 shadow-lg" onClick={() => { setAutoFilterValid(true); onChangeView("vendor-products") }}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-blue-100">Produits actifs</CardTitle>
                 </CardHeader>
@@ -647,7 +613,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                 </CardContent>
               </Card>
 
-              <Card onClick={() => setActiveTab("sponsor")}
+          <Card onClick={() => { setAutoFilterSponsor(true); onChangeView("vendor-sponsors") }}
                 style={{
                 backgroundColor: "#F7C600",   // jaune solide
                 borderRadius: "12px",
@@ -672,7 +638,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                 </CardContent>
               </Card>
 
-              <Card className="!bg-transparent bg-gradient-to-br from-[#FFA726] to-[#FF9800] text-white border-0 shadow-lg" onClick={() => setActiveTab("orders")}>
+              <Card className="!bg-transparent bg-gradient-to-br from-[#FFA726] to-[#FF9800] text-white border-0 shadow-lg" onClick={() => onChangeView("vendor-orders")}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-orange-100">Commandes</CardTitle>
                 </CardHeader>
@@ -710,7 +676,8 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                     ) : (
                       popularProducts.map((product, index) => (
                         <div key={product.id} onClick={() => {
-                                                        setActiveTab("products")
+                                                        onChangeView("vendor-products");
+                                                        setInstantSearch(true);
                                                         setSearchTerm(product.nom)
                                                       }}
                           className="flex items-center space-x-3 p-4 bg-gradient-to-r from-gray-50 to-white border border-gray-100 rounded-lg hover:shadow-md transition-shadow">
@@ -763,7 +730,7 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                   <div className="space-y-4">
                     {mockOrders.slice(0, 3).map((order) => (
                       <div key={order.id} onClick={() => {
-                        setActiveTab("orders")
+                        onChangeView("vendor-orders")
                       }}
                         className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white border border-gray-100 rounded-lg hover:shadow-md transition-shadow">
                         <div>
@@ -776,425 +743,446 @@ export default function VendorDashboard({ currentUser, onLogout }: VendorDashboa
                     ))}
                   </div>
                 </CardContent>
-              </Card>
+          </Card>
+        </div>
+      </>
+    );
+  };
+  
+  // contenu de produits
+  const renderProducts = () => {
+    return (
+      <>
+        <div className="section-card">   
+          {/* header */}             
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold">Mes produits et services locations</h3>
+            <div className="flex items-center gap-3">
+              <Button 
+                className="bg-[#2D8A47] hover:bg-[#245A35]"
+                onClick={() => setIsNewProductModalOpen(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Ajouter un produit
+              </Button>
+              <Button 
+                style={{ backgroundColor: "#2563EB", color: "white", transition: "0.2s" }}
+                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#1D4ED8")}
+                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#2563EB")}
+                onClick={() => setIsNewLocationModalOpen(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Nouvelle location
+              </Button>
             </div>
-          </TabsContent>
+          </div>
 
-          <TabsContent value="products">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Mes produits et services locations</CardTitle>
-                  <div className='flex items-center justify-end space-x-3'>
-                    <Button 
-                      className="bg-[#2D8A47] hover:bg-[#245A35]"
-                      onClick={() => setIsNewProductModalOpen(true)}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Ajouter un produit
-                    </Button>
-                    <Button 
-                      style={{ backgroundColor: "#2563EB", color: "white", transition: "0.2s" }}
-                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#1D4ED8")}
-                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#2563EB")}
-                      onClick={() => setIsNewLocationModalOpen(true)}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Nouvelle location
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {/* Search and Filters */}
-                <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      placeholder="Rechercher un produit..."
-                      value={searchTerm}
-                      onChange={(e: any) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  
-                  {/* Bouton Filtres */}
-                  <div className="relative inline-block">
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowFilterDropdown(prev => !prev)}
-                    >
-                      <Filter className="h-4 w-4 mr-2" />
-                      Filtres
-                    </Button>
-
-                    {showFilterDropdown && (
-                      <div className="absolute right-0 mt-1 w-auto max-h-[550px] overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 whitespace-nowrap" style={{ minWidth: "260px" }}>
-                        {sections.map((section, index) => {
-                          const isOpen = openSections[index] || false;
-                          return (
-                            <div key={index} className="border-b border-gray-100">
-                              <button
-                                onClick={() =>
-                                  setOpenSections(prev => ({ ...prev, [index]: !prev[index] }))
-                                }
-                                className="w-full px-3 py-2 flex justify-between items-center text-left text-sm font-medium text-gray-700 hover:bg-gray-100"
-                              >
-                                {section.title}
-                                <svg
-                                  className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </button>
-
-                              {isOpen && (
-                                <div className="px-2 pb-2">
-                                  {section.options.map((opt: any, idx: number) => (
-                                    <button
-                                      key={idx}
-                                      onClick={() => handleApplyFilter(section.type, opt.value)}
-                                      className="block w-full text-left px-3 py-1 text-sm rounded
-                                                transition-shadow
-                                                hover:bg-gray-500 hover:shadow-lg hover:text-gray-900"
-                                    >
-                                      {opt.label}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Products Table */}
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Produit</TableHead>
-                        <TableHead>Prix</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Détails location</TableHead>
-                        <TableHead>Stock</TableHead>
-                        <TableHead>Statut</TableHead>
-                        <TableHead>Sponsor</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredProducts.map((product) => (
-                        <TableRow key={product.id}>
-                          <TableCell>
-                            <div className="flex items-center space-x-3">
-                              <ImageWithFallback
-                                src={product.image}
-                                alt={product.nom}
-                                className="w-12 h-12 object-cover rounded"
-                              />
-                              <div>
-                                <p className="font-medium">{product.nom}</p>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-medium">{formatPrice(product.price)}</TableCell>
-                          <TableCell>{<StatusBadge status={product.typeProduit} />}</TableCell>
-                          <TableCell>
-                            {product.typeProduit === "location" ? (
-                              <div className="text-sm leading-tight text-gray-700">
-                                <p className="font-medium">{product.locationDetails?.typePrix || "—"}</p>
-                                <p className="font-medium">
-                                  Caution : {formatPrice(product.locationDetails?.caution || 0)}
-                                </p>
-                              </div>
-                            ) : (
-                              <span className="text-gray-500">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell>{product.stock > 0 ? product.stock : <span className="text-red-500">Rupture</span>}</TableCell>
-                          <TableCell>{<StatusBadge status={product.status} />}</TableCell>
-                          <TableCell className="text-center">
-                            {product.sponsorisé ? (
-                              <div className="flex items-center justify-center w-8 h-8">
-                                <span className="text-gray-400 text-lg font-semibold">—</span>
-                              </div>
-                            ) : product.status !== "validé" ? (
-                              <div className="flex items-center justify-center w-8 h-8">
-                                <span className="text-gray-400 text-lg font-semibold">—</span>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => handleAddSponsor(product.id)}
-                                title="Sponsoriser ce produit"
-                                className="flex items-center justify-center w-8 h-8 rounded-full text-black font-bold transition-colors duration-200 shadow-md border border-yellow-400"
-                                style={{
-                                  backgroundColor: '#FACC15',
-                                  boxShadow: "0 1px 2px rgba(0,0,0,0.1)"
-                                  }}
-                                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#EAB308")}
-                                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#FACC15")}
-                              >
-                                <Plus className="h-4 w-4" />
-                              </button>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex space-x-2">
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => handleViewProduct(product.id)}
-                                title="Voir le produit"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => handleEditProduct(product.id)}
-                                title="Modifier le produit"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="text-red-500 hover:text-red-700"
-                                onClick={() => handleDeleteProduct(product.id)}
-                                title="Supprimer le produit"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="sponsor">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Mes produits sponsorisés</CardTitle>
-                  
-                  {/* Bouton Filtres */}
-                  <div className="flex items-center mb-3 gap-3">
-                    <label className="text-sm text-gray-600">Statut :</label>
-                    <select
-                      value={selectedSponsorStatus}
-                      onChange={(e) => filterSponsorsByStatus(e.target.value)}
-                      className="border border-gray-300 rounded-md px-3 py-1 text-sm"
-                    >
-                      {sponsorFilterOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>                
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>                 
-                {/* Products Table */}
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Produit</TableHead>
-                        <TableHead>Prix</TableHead>
-                        <TableHead>Statut</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Date début</TableHead>
-                        <TableHead>Date fin</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredSponsors.map((s) => (
-                        <TableRow key={s.id}>
-                          <TableCell>
-                            <div className="flex items-center space-x-3">
-                              <ImageWithFallback
-                                src={s.produit.images[0]}
-                                alt={s.produit.nom}
-                                className="w-12 h-12 object-cover rounded"
-                              />
-                              <div>
-                                <p className="font-medium">{s.produit.nom}</p>
-                              </div>
-                            </div>
-                          </TableCell>
-
-                          <TableCell>{formatPrice(Number(s.produit.prix))}</TableCell>
-
-                          <TableCell>
-                            <StatusBadge status={s.statut} />
-                          </TableCell>
-
-                          <TableCell>
-                            <StatusBadge status={s.produit.isLocation ? "location" : "vente"} />
-                          </TableCell>
-
-                          <TableCell>
-                            {new Date(s.dateDebut).toLocaleDateString("fr-FR")}
-                          </TableCell>
-
-                          <TableCell>
-                            {new Date(s.dateFin).toLocaleDateString("fr-FR")}
-                          </TableCell>
-
-                          <TableCell>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleViewProduct(s.produit.id)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                              {s.statut === "refusé" && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-yellow-600 hover:text-yellow-700"
-                                  onClick={() => handleResponsor(s.id)}
-                                >
-                                  <RefreshCw className="h-4 w-4" />
-                                </Button>
-                              )}
-
-                            {/* Supprimer sponsoring */}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-500 hover:text-red-700"
-                              onClick={() => handleDeleteSponsor(s.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>                            
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="orders">
-            <Card>
-              <CardHeader>
-                <CardTitle>Gestion des commandes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Commande</TableHead>
-                        <TableHead>Client</TableHead>
-                        <TableHead>Produits</TableHead>
-                        <TableHead>Total</TableHead>
-                        <TableHead>Paiement</TableHead>
-                        <TableHead>Statut</TableHead>
-                        <TableHead>Date</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {mockOrders.map((order) => (
-                        <TableRow key={order.id}>
-                          <TableCell className="font-medium">{order.id}</TableCell>
-                          <TableCell>{order.customer}</TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              {order.products.map((product, index) => (
-                                <div key={index}>{product}</div>
-                              ))}
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-medium text-[#2D8A47]">{formatPrice(order.total)}</TableCell>
-                          <TableCell>
-                            <span className="capitalize text-sm">{order.payment.replace('_', ' ')}</span>
-                          </TableCell>
-                          <TableCell>{<StatusBadge status={order.status} />}</TableCell>
-                          <TableCell>{order.date}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="analytics">
-            <div className="grid lg:grid-cols-2 gap-8">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Évolution des ventes</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-64 flex items-center justify-center text-gray-500">
-                    <div className="text-center">
-                      <TrendingUp className="h-12 w-12 mx-auto mb-4" />
-                      <p>Graphique des ventes à venir</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Répartition des paiements</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                        <span>MVola</span>
-                      </div>
-                      <span className="font-medium">45%</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                        <span>Orange Money</span>
-                      </div>
-                      <span className="font-medium">30%</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                        <span>Carte bancaire</span>
-                      </div>
-                      <span className="font-medium">20%</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-3 h-3 bg-red-700 rounded-full"></div>
-                        <span>Airtel Money</span>
-                      </div>
-                      <span className="font-medium">5%</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+          {/* Search and Filters */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Rechercher un produit..."
+                value={searchTerm}
+                onChange={(e: any) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
             </div>
-          </TabsContent>
-        </Tabs>
+                  
+            {/* Bouton Filtres */}
+            <div className="relative inline-block">
+              <Button
+                variant="outline"
+                onClick={() => setShowFilterDropdown(prev => !prev)}
+              >
+                <Filter className="h-4 w-4 mr-2" />
+                Filtres
+              </Button>
+
+              {showFilterDropdown && (
+                <div className="absolute right-0 mt-1 w-auto max-h-[550px] overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 whitespace-nowrap" style={{ minWidth: "260px" }}>
+                  {sections.map((section, index) => {
+                    const isOpen = openSections[index] || false;
+                    return (
+                      <div key={index} className="border-b border-gray-100">
+                        <button
+                          onClick={() =>
+                            setOpenSections(prev => ({ ...prev, [index]: !prev[index] }))
+                          }
+                          className="w-full px-3 py-2 flex justify-between items-center text-left text-sm font-medium text-gray-700 hover:bg-gray-100"
+                          >
+                          {section.title}
+                          <svg
+                            className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+
+                        {isOpen && (
+                          <div className="px-2 pb-2">
+                            {section.options.map((opt: any, idx: number) => (
+                              <button
+                                key={idx}
+                                onClick={() => handleApplyFilter(section.type, opt.value)}
+                                className="block w-full text-left px-3 py-1 text-sm rounded
+                                            transition-shadow
+                                            hover:bg-gray-500 hover:shadow-lg hover:text-gray-900"
+                                >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Products Table */}
+            <div className="overflow-x-auto bg-white rounded-lg shadow">
+              <Table className="w-full table-auto">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Produit</TableHead>
+                    <TableHead>Prix</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Détails location</TableHead>
+                    <TableHead>Stock</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead>Sponsor</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredProducts.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell>
+                        <div className="flex items-center space-x-3">
+                          <ImageWithFallback
+                            src={product.image}
+                            alt={product.nom}
+                            className="w-12 h-12 object-cover rounded"
+                          />
+                          <div>
+                            <p className="font-medium">{product.nom}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">{formatPrice(product.price)}</TableCell>
+                      <TableCell>{<StatusBadge status={product.typeProduit} />}</TableCell>
+                      <TableCell>
+                        {product.typeProduit === "location" ? (
+                          <div className="text-sm leading-tight text-gray-700">
+                            <p className="font-medium">{product.locationDetails?.typePrix || "—"}</p>
+                            <p className="font-medium">
+                              Caution : {formatPrice(product.locationDetails?.caution || 0)}
+                            </p>
+                          </div>
+                        ) : (
+                          <span className="text-gray-500">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>{product.stock > 0 ? product.stock : <span className="text-red-500">Rupture</span>}</TableCell>
+                      <TableCell>{<StatusBadge status={product.status} />}</TableCell>
+                      <TableCell className="text-center">
+                        {product.sponsorisé ? (
+                          <div className="flex items-center justify-center w-8 h-8">
+                            <span className="text-gray-400 text-lg font-semibold">—</span>
+                          </div>
+                        ) : product.status !== "validé" ? (
+                          <div className="flex items-center justify-center w-8 h-8">
+                            <span className="text-gray-400 text-lg font-semibold">—</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleAddSponsor(product.id)}
+                            title="Sponsoriser ce produit"
+                            className="flex items-center justify-center w-8 h-8 rounded-full text-black font-bold transition-colors duration-200 shadow-md border border-yellow-400"
+                            style={{
+                              backgroundColor: '#FACC15',
+                              boxShadow: "0 1px 2px rgba(0,0,0,0.1)"
+                            }}
+                            onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#EAB308")}
+                            onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#FACC15")}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleViewProduct(product.id)}
+                            title="Voir le produit"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleEditProduct(product.id)}
+                            title="Modifier le produit"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-red-500 hover:text-red-700"
+                            onClick={() => handleDeleteProduct(product.id)}
+                            title="Supprimer le produit"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+        </div>
+      </>
+    );
+  };
+
+  // contenu de sponsors
+  const renderSponsor = () => {
+    return (
+      <>
+        <div className="section-card">
+          {/* header */}
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold">Mes produits sponsorisés</h3>
+                  
+            {/* Bouton Filtres */}
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-gray-600">Statut :</label>
+              <select
+                value={selectedSponsorStatus}
+                onChange={(e) => filterSponsorsByStatus(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-1 text-sm"
+              >
+                {sponsorFilterOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>                
+            </div>
+          </div>
+                
+          {/* Products Table */}
+          <div className="overflow-x-auto bg-white rounded-lg shadow">
+            <Table className="w-full table-auto">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Produit</TableHead>
+                  <TableHead>Prix</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Date début</TableHead>
+                  <TableHead>Date fin</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredSponsors.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <div className="flex items-center space-x-3">
+                        <ImageWithFallback
+                          src={s.produit.images[0]}
+                          alt={s.produit.nom}
+                          className="w-12 h-12 object-cover rounded"
+                        />
+                        <div>
+                          <p className="font-medium">{s.produit.nom}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>{formatPrice(Number(s.produit.prix))}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={s.statut} />
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={s.produit.isLocation ? "location" : "vente"} />
+                    </TableCell>
+                    <TableCell>
+                      {new Date(s.dateDebut).toLocaleDateString("fr-FR")}
+                    </TableCell>
+                    <TableCell>
+                      {new Date(s.dateFin).toLocaleDateString("fr-FR")}
+                    </TableCell>
+                    <TableCell>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleViewProduct(s.produit.id)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                        {s.statut === "refusé" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-yellow-600 hover:text-yellow-700"
+                            onClick={() => handleResponsor(s.id)}
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                        )}
+
+                        {/* Supprimer sponsoring */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-500 hover:text-red-700"
+                          onClick={() => handleDeleteSponsor(s.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>                            
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  // contenu de commandes
+  const renderOrders = () => {
+    return (
+      <>
+        <div className="section-card">
+
+          {/* Header */}
+          <h3 className="text-xl font-bold mb-6">Gestion des commandes</h3>
+
+          {/* Table */}
+          <div className="overflow-x-auto bg-white rounded-lg shadow">
+            <Table className="w-full table-auto">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Commande</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Produits</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead>Paiement</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead>Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {mockOrders.map((order) => (
+                  <TableRow key={order.id}>
+                    <TableCell className="font-medium">{order.id}</TableCell>
+                    <TableCell>{order.customer}</TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                          {order.products.map((product, index) => (
+                          <div key={index}>{product}</div>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-medium text-[#2D8A47]">{formatPrice(order.total)}</TableCell>
+                    <TableCell>
+                      <span className="capitalize text-sm">{order.payment.replace('_', ' ')}</span>
+                    </TableCell>
+                    <TableCell>{<StatusBadge status={order.status} />}</TableCell>
+                    <TableCell>{order.date}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  // contenu d'analyse
+  const renderAnalytics = () => {
+    return (
+      <>
+        <div className="grid lg:grid-cols-2 gap-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Évolution des ventes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-64 flex items-center justify-center text-gray-500">
+                <div className="text-center">
+                  <TrendingUp className="h-12 w-12 mx-auto mb-4" />
+                  <p>Graphique des ventes à venir</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Répartition des paiements</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                    <span>MVola</span>
+                  </div>
+                  <span className="font-medium">45%</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                    <span>Orange Money</span>
+                  </div>
+                  <span className="font-medium">30%</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <span>Carte bancaire</span>
+                  </div>
+                  <span className="font-medium">20%</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-red-700 rounded-full"></div>
+                    <span>Airtel Money</span>
+                  </div>
+                  <span className="font-medium">5%</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </>
+    );
+  };
+  
+  return (
+    <div className="px-6 py-4">
+
+      <div className="container mx-auto px-4 py-4">
+        {currentView === "overview" && renderOverview()}
+        {currentView === "products" && renderProducts()}
+        {currentView === "sponsor" && renderSponsor()}
+        {currentView === "orders" && renderOrders()}
+        {currentView === "analytics" && renderAnalytics()}
       </div>
 
       {/* New Product Modal */}

@@ -61,7 +61,7 @@ export default function Home({
 
   const navigateToVendorDashboard = () => {
     if (currentUser?.role === 'vendor') {
-      navigate('/vendor');
+      navigate('/dashboard');
     } else {
       toast.error('Connexion vendeur requise', {
         description: 'Connectez-vous pour accéder à votre tableau de bord vendeur'
@@ -70,14 +70,17 @@ export default function Home({
     }
   };
   
-  const navigateToDashboard = (role: 'client' | 'vendor' | 'admin') => {
-    if (currentUser?.role === role) {
-      navigate(`/${role}`);
-    } else {
-      toast.error(`Connexion ${role} requise`, {
-        description: `Connectez-vous pour accéder à votre espace ${role}`
-      });
+  const navigateToDashboard = () => {
+    if (!currentUser) {
+      toast.error("Connexion requise");
       setIsAuthModalOpen(true);
+      return;
+    }
+
+    if (currentUser.role === "admin") {
+      navigate("/admin");
+    } else {
+      navigate("/dashboard");
     }
   };
 
@@ -123,13 +126,7 @@ export default function Home({
 
   const handleLoginSuccess = (user: UserData) => {
     onLogin(user);
-    
-    // Redirect users to their respective dashboard after login
-    if (user.role === 'vendor') {
-      navigate('/vendor');
-    } else if (user.role === 'client') {
-      navigate('/client');
-    }
+    navigate('/dashboard'); // 🚀 redirection unique
   };
 
   if (currentPage === 'product' && selectedProductId) {
@@ -291,19 +288,7 @@ export default function Home({
         onSearchClick={handleSearch}
         onNavigationClick={handleNavigationClick}
         onProfileClick={() => {
-          if (!currentUser) return;
-
-          switch (currentUser.role) {
-            case 'vendor':
-              navigateToDashboard('vendor');
-              break;
-            case 'client':
-              navigateToDashboard('client');
-              break;
-            case 'admin':
-              navigateToDashboard('admin');
-              break;
-          }
+          navigateToDashboard();
         }}
         currentUser={currentUser}
       />

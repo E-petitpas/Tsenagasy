@@ -196,3 +196,8 @@
 .section-card input[type="text"]:focus {
     box-shadow: 0 0 0 3px rgba(45, 138, 71, 0.1);
 }
+
+.sub-btn {
+    padding-left: 28px !important;
+    padding-right: 28px !important;
+}
