@@ -95,3 +95,49 @@ export const getAdminStats = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Erreur récupération statistiques" });
   }
 };
+
+// pour profile dans client
+export const getUserProfile = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ error: "userId requis." });
+    }
+
+    const user = await prisma.utilisateur.findUnique({
+      where: { id: userId },
+      include: {
+        magasins: true, // le vendeur peut avoir plusieurs magasins
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "Utilisateur introuvable." });
+    }
+
+    const firstStore = user.role === "vendor" && user.magasins.length > 0
+      ? user.magasins[0].nom_Magasin
+      : null;
+
+    const formattedProfile = {
+      id: user.id,
+      role: user.role,
+
+      name: user.nom,
+      email: user.email,
+      tel: user.tel,
+      adresse: user.adresse,
+
+      storeName: firstStore, // null si pas vendeur
+    };
+
+    return res.json(formattedProfile);
+
+  } catch (error) {
+    console.error("Erreur getUserProfile :", error);
+    return res.status(500).json({
+      error: "Erreur lors de la récupération du profil utilisateur.",
+    });
+  }
+};

@@ -21,7 +21,6 @@ import {
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { NewProductModal } from '../components/NewProductModal';
@@ -38,7 +37,6 @@ import Swal from 'sweetalert2';
 
 interface VendorDashboardProps {
   currentUser: UserData & { type: "vendor" };
-  onLogout: () => void;
   activeView: string;
   onChangeView: (
     view:
@@ -87,7 +85,7 @@ const mockOrders = [
   }
 ];
 
-export default function VendorDashboard({ currentUser, onLogout, activeView, onChangeView }: VendorDashboardProps){
+export default function VendorDashboard({ currentUser, activeView, onChangeView }: VendorDashboardProps){
   const [searchTerm, setSearchTerm] = useState('');
   const [orders, setOrders] = useState(mockOrders);
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);

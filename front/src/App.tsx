@@ -121,22 +121,6 @@ export default function App() {
             }
           />
           
-          {/* <Route 
-            path="/client/*" 
-            element={
-              currentUser?.role === 'client' 
-                ? <ClientDashboardPage currentUser={currentUser as UserData & { type: "client" }} onLogout={handleLogout} /> 
-                : <Navigate to="/" replace />
-            }  
-          />
-          { <Route 
-              path="/vendor/*" 
-              element={
-                currentUser?.role === 'vendor'
-                  ? <VendorDashboard currentUser={currentUser as UserData & { type: "vendor" }} onLogout={handleLogout} /> 
-                  : <Navigate to="/" replace />
-              }
-            /> } */}
           <Route
             path="/admin/*"
             element={

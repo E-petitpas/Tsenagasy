@@ -27,7 +27,7 @@ router.post('/productbyMerchand/search/:commercantId', product.searchProductsbyC
 router.get('/popular-products/:magasinId', product.getPopularProducts); // ok
 router.get('/admin/products', product.getAllProductsForAdmin); //ok
 router.put('/admin/products/decision/:productId', product.updateProductStatus); //ok
-router.delete('/admin/delete/:productId', product.deleteProduct);
+router.delete('/admin/delete/:productId', product.deleteProduct); //ok
 
 import * as sponsor from '../controller/sponsorController'
 router.post('/sponsor/create', sponsor.createSponsor); //ok
@@ -40,7 +40,8 @@ router.put('/admin/sponsors/:id', sponsor.updateSponsorStatusAdmin); //ok
 router.delete('/admin/delete/sponsors/:id', sponsor.deleteSponsor); //ok
 
 import * as dashboard from '../controller/dashboardController'
-router.get('/vendor/stats/:magasinId', dashboard.getVendorStats);
-router.get('/admin/stats', dashboard.getAdminStats);
+router.get('/vendor/stats/:magasinId', dashboard.getVendorStats); //ok
+router.get('/admin/stats', dashboard.getAdminStats); //ok
+router.get('/api/user/:userId', dashboard.getUserProfile); //ok
 
 export default router;
