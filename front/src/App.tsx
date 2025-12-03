@@ -5,8 +5,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { toast, Toaster } from 'sonner';
 import { AuthStorage, UserData } from './config/authStorage';
 import Home from './pages/home';
-import ClientDashboardPage from './pages/clientDashboard';
-import VendorDashboard from './pages/vendorDashboard';
+import HomePublic from './pages/homePublic';
+import HomePrivate from './pages/homePrivate';
 import AdminDashboard from './pages/adminDashboard';
 import UserDashboard from './pages/UserDashboard';
 
@@ -102,13 +102,33 @@ export default function App() {
         <Toaster position="top-right" richColors />
         
         <Routes>
-          <Route 
+          {/* <Route 
             path="/" 
             element={currentUser?.role === 'admin' ? (
                   <Navigate to="/admin" replace />
                 ) : (
                   <Home {...sharedProps} />
                 )} 
+          /> */}
+
+          {/* --------- PAGE HOME --------- */}
+          <Route 
+            path="/" 
+            element={
+              currentUser
+                ? (
+                    currentUser.role === "admin"
+                      ? <Navigate to="/admin" replace />
+                      : <HomePrivate 
+                          currentUser={currentUser}
+                          cartItemCount={cartItemCount}
+                          onAddToCart={handleAddToCart}
+                          setCartItemCount={setCartItemCount}
+                          onLogout={handleLogout}
+                        />
+                  )
+                : <HomePublic {...sharedProps} />
+            } 
           />
           
           {/* ROUTE COMMUNE CLIENT + VENDEUR */}

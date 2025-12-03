@@ -29,9 +29,9 @@ export const getCategories = async (req: Request, res: Response) => {
 export const createProduct = async (req: Request, res: Response) => {
 
   try {
-    const { nom, prix, stock, categorieId, commercantId, tags, description, poids, dimensions, materiaux, statut, type_produit } = req.body;
+    const { nom, prix, stock, categorieId, commercantId, tags, description, poids, dimensions, materiaux, statut} = req.body;
 
-    if ( !nom || !prix || !stock || !categorieId || !commercantId || !description || !poids || !dimensions || !materiaux || !statut|| !type_produit) {
+    if ( !nom || !prix || !stock || !categorieId || !commercantId || !description || !poids || !dimensions || !materiaux || !statut) {
       return res.status(400).json({ error: "Champs obligatoires manquants" });
     }
 

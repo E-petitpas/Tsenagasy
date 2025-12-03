@@ -141,3 +141,58 @@ export const getUserProfile = async (req: Request, res: Response) => {
     });
   }
 };
+
+// pour les sponsors dans la bannière
+export const getAllSponsoredProducts = async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+
+    const sponsors = await prisma.sponsor.findMany({
+      where: {
+        statut: "validé",
+        dateFin: { gt: now }, // sponsor encore valide
+      },
+      include: {
+        produit: {
+          include: {
+            magasin: true,
+            categorie: true,
+            produitLocation: true,
+          },
+        },
+      },
+      orderBy: { dateDebut: "asc" },
+    });
+
+    if (!sponsors || sponsors.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    // FORMATAGE DES DONNÉES POUR LE FRONT
+    const formatted = sponsors.map((s) => ({
+      id: s.id,
+      produitId: s.produitId,
+
+      // --- Produit ---
+      title: s.produit.nom,
+      desc: s.produit.descriptions,
+      price: Number(s.produit.prix), // on renvoie un number propre
+      images: s.produit.images ?? [],
+      tags: s.produit.tags ?? [],
+      typeProduit: s.produit.isLocation ? "location" : "vente",
+      typePrix: s.produit.produitLocation?.typePrix ?? null,
+
+      // --- Catégorie ---
+      category: s.produit.categorie?.nomCat ?? null,
+
+      // --- Magasin ---
+      magasin: s.produit.magasin?.nom_Magasin ?? null,
+    }));
+
+    return res.status(200).json(formatted);
+
+  } catch (error) {
+    console.error("Erreur getAllSponsoredProducts :", error);
+    return res.status(500).json({ error: "Erreur lors du chargement des sponsors." });
+  }
+};

@@ -1,4 +1,4 @@
-// front/src/componenents/vendorAuthModal.tsx
+// front/src/components/vendorAuthModal.tsx
 import React, { useState, useEffect } from "react";
 import { Mail, Lock, User, Phone, MapPin, Eye, EyeOff } from "lucide-react";
 import { Button } from "./ui/button";

@@ -43,5 +43,6 @@ import * as dashboard from '../controller/dashboardController'
 router.get('/vendor/stats/:magasinId', dashboard.getVendorStats); //ok
 router.get('/admin/stats', dashboard.getAdminStats); //ok
 router.get('/api/user/:userId', dashboard.getUserProfile); //ok
+router.get('/api/sponsor', dashboard.getAllSponsoredProducts)
 
 export default router;

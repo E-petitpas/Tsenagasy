@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, ShoppingCart, User, Menu, MapPin } from 'lucide-react';
+import { Search, ShoppingCart, User, Menu, MapPin, LogOut } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
@@ -15,9 +15,10 @@ interface HeaderProps {
   onSearchClick?: (query: string) => void;
   onNavigationClick?: (section: string) => void;
   currentUser?: UserData | null;
+  onLogoutClick?: () => void;
 }
 
-export function Header({ cartItemCount = 0, onLoginClick, onCartClick, onProfileClick, onSearchClick, onNavigationClick, currentUser }: HeaderProps) {
+export function Header({ cartItemCount = 0, onLoginClick, onCartClick, onProfileClick, onSearchClick, onNavigationClick, currentUser, onLogoutClick }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleSearch = (e: React.FormEvent) => {
@@ -107,7 +108,7 @@ export function Header({ cartItemCount = 0, onLoginClick, onCartClick, onProfile
           {/* Right Section */}
           <div className="flex items-center space-x-4">
             {/* Cart */}
-            <Button variant="ghost" size="sm" className="relative" onClick={onCartClick}>
+            <Button variant="ghost" size="sm" className="relative border border-gray-300 rounded-md" onClick={onCartClick}>
               <ShoppingCart className="h-6 w-6" />
               {cartItemCount > 0 && (
                 <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-[#FFA726] text-black text-xs flex items-center justify-center">
@@ -128,6 +129,31 @@ export function Header({ cartItemCount = 0, onLoginClick, onCartClick, onProfile
                   <p className="text-sm">{currentUser.name}</p>
                   <p className="text-xs text-gray-500 capitalize">{currentUser.role}</p>
                 </div>
+
+                {/* Séparateur vertical */}
+                <div className="h-6 w-px bg-gray-300" />
+
+                {/* Bouton Déconnexion visible */}
+                {onLogoutClick && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation(); // évite d’ouvrir le dashboard
+                      onLogoutClick();
+                    }}
+                    className="
+                      flex items-center gap-1 
+                      px-3 py-1.5 
+                      text-gray-600 
+                      border border-gray-300 
+                      rounded-md 
+                      hover:text-red-600 
+                      hover:border-red-400 
+                      transition
+                    "
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             ) : (
               <Button 
