@@ -3,13 +3,12 @@ import { useNavigate } from 'react-router-dom';
 
 import { Header } from '../components/Header';
 import { PromoBanner } from '../components/PromoBanner';
-import { PopularProducts } from '../components/PopularProducts';
-import { ProductDetail } from '../components/ProductDetail';
+import { ProductGrid } from '../components/productGrid';
 import { CartCheckout } from '../components/CartCheckout';
 
 import { UserData } from '../config/authStorage';
 
-type Page = 'home' | 'product' | 'cart' | 'search';
+type Page = 'home' | 'cart' | 'search';
 
 interface HomePrivateProps {
   currentUser: UserData;
@@ -24,36 +23,17 @@ export default function HomePrivate({currentUser, cartItemCount, onAddToCart, se
   const navigate = useNavigate();
 
   const [currentPage, setCurrentPage] = useState<Page>('home');
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
 
   // ---------------------------
   // Navigation interne simplifiée
   // ---------------------------
 
-  const openProduct = (id: string) => {
-    setSelectedProductId(id);
-    setCurrentPage('product');
-  };
-
   const openCart = () => setCurrentPage('cart');
-  const backToHome = () => {
-    setCurrentPage('home');
-    setSelectedProductId(null);
-  };
+  const backToHome = () => setCurrentPage('home');
 
   // ---------------------------
   // Pages spécifiques
   // ---------------------------
-
-  if (currentPage === 'product' && selectedProductId) {
-    return (
-      <ProductDetail
-        productId={selectedProductId}
-        onBack={backToHome}
-        onAddToCart={onAddToCart}
-      />
-    );
-  }
 
   if (currentPage === 'cart') {
     return <CartCheckout onBack={backToHome} />;
@@ -80,12 +60,11 @@ export default function HomePrivate({currentUser, cartItemCount, onAddToCart, se
       <main>
 
         {/* ---------------- PROMO adaptée (sans CTA login) ---------------- */}
-        <PromoBanner isPublicHome={false}/>
+        <PromoBanner isPublicHome={false} onAddToCart={onAddToCart}/>
 
         {/* ---------------- PRODUITS ---------------- */}
-        <PopularProducts
+        <ProductGrid
           onAddToCart={onAddToCart}
-          onProductClick={openProduct}
         />
 
         {/* ---------------- QUICK SERVICES (adapté connecté) ---------------- */}

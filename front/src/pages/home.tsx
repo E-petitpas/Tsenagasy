@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { AuthModal } from '../components/AuthModal';
 import { PromoBanner } from '../components/PromoBanner';
-import { PopularProducts } from '../components/PopularProducts';
+import { PopularProducts } from '../components/productGrid.';
 import { ProductDetail } from '../components/ProductDetail';
 import { CartCheckout } from '../components/CartCheckout';
 import { RechargeWalletModal } from '../components/RechargeWalletModal';

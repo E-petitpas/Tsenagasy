@@ -4,8 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { AuthModal } from '../components/AuthModal';
 import { PromoBanner } from '../components/PromoBanner';
-import { PopularProducts } from '../components/PopularProducts';
-import { ProductDetail } from '../components/ProductDetail';
+import { ProductGrid } from '../components/productGrid';
 import { CartCheckout } from '../components/CartCheckout';
 import { VendorAuthModal } from '../components/vendorAuthModal';
 
@@ -15,7 +14,7 @@ import { TransferFundsModal } from '../components/TransferFundsModal';
 import { toast } from 'sonner';
 import { UserData } from '../config/authStorage';
 
-type Page = 'home' | 'product' | 'cart' | 'search';
+type Page = 'home' | 'cart' | 'search';
 
 interface HomePublicProps {
   currentUser: UserData | null;
@@ -30,21 +29,13 @@ export default function HomePublic({ currentUser, cartItemCount, onLogin, onAddT
   const navigate = useNavigate();
 
   const [currentPage, setCurrentPage] = useState<Page>('home');
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
 
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  const openProduct = (id: string) => {
-    setSelectedProductId(id);
-    setCurrentPage('product');
-  };
 
   const openCart = () => setCurrentPage('cart');
-  const backToHome = () => {
-    setCurrentPage('home');
-    setSelectedProductId(null);
-  };
+  const backToHome = () => setCurrentPage('home');
 
   // -------------------------
   // Login
@@ -56,19 +47,14 @@ export default function HomePublic({ currentUser, cartItemCount, onLogin, onAddT
     navigate('/dashboard');  // 🔥 redirection une fois connecté
   };
 
+  const handlePublicAddToCart = async (productId: string) => {
+    toast.error("Connectez-vous pour ajouter au panier");
+    setIsAuthModalOpen(true);
+  };
+
   // -------------------------
   // Pages spéciales
   // -------------------------
-
-  if (currentPage === 'product' && selectedProductId) {
-    return (
-      <ProductDetail
-        productId={selectedProductId}
-        onBack={backToHome}
-        onAddToCart={onAddToCart}
-      />
-    );
-  }
 
   if (currentPage === 'cart') {
     return <CartCheckout onBack={backToHome} />;
@@ -118,15 +104,11 @@ export default function HomePublic({ currentUser, cartItemCount, onLogin, onAddT
 
       {/* ---------------- HERO + PROMO ---------------- */}
       <main>
-        <PromoBanner isPublicHome={true}/>
+        <PromoBanner isPublicHome={true} onAddToCart={handlePublicAddToCart}/>
 
         {/* ---------------- PRODUITS POPULAIRES ---------------- */}
-        <PopularProducts
-          onAddToCart={(productId) => {
-            toast.error("Connectez-vous pour ajouter au panier");
-            setIsAuthModalOpen(true);
-          }}
-          onProductClick={openProduct}
+        <ProductGrid
+          onAddToCart={handlePublicAddToCart}
         />
 
         {/* ---------------- VENDEURS PARTENAIRES ---------------- */}

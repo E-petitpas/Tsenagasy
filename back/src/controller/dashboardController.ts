@@ -196,3 +196,89 @@ export const getAllSponsoredProducts = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Erreur lors du chargement des sponsors." });
   }
 };
+
+// récupérer les produits
+export const getAllProducts = async (req: Request, res: Response) => {
+  try {
+    const products = await prisma.produit.findMany({
+      where: {
+        statut: { in: ["publie", "publié", "validé", "approuvé"] },
+      },
+      include: {
+        magasin: { select: { nom_Magasin: true, type: true } },
+        categorie: { select: { nomCat: true } },
+        produitLocation: { select: { typePrix: true } },
+        Sponsor: { select: { statut: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const formatted = products.map((p) => ({
+      id: p.id,
+      nom: p.nom,
+      prix: Number(p.prix),
+      stock: p.stock,
+      images: p.images ?? [],
+      tags: p.tags ?? [],
+      isLocation: p.isLocation,
+
+      // obligatoires
+      categorie: { nomCat: p.categorie.nomCat },
+      magasin: { nom_Magasin: p.magasin.nom_Magasin, type: p.magasin.type },
+
+      // optionnel
+      typePrix: p.produitLocation?.typePrix ?? null,
+      Sponsor: p.Sponsor ?? null,
+    }));
+
+    return res.status(200).json(formatted);
+  } catch (e) {
+    console.error("Erreur getAllProducts:", e);
+    return res.status(500).json({ error: "Erreur récupération produits" });
+  }
+};
+
+// récupérer les details
+export const getProductDetailsById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ error: "id requis" });
+
+    const p = await prisma.produit.findUnique({
+      where: { id },
+      include: {
+        magasin: { select: { nom_Magasin: true, type: true } },
+        categorie: { select: { nomCat: true } },
+        produitLocation: true,
+        Sponsor: true,
+      },
+    });
+
+    if (!p) return res.status(404).json({ error: "Produit introuvable" });
+
+    return res.status(200).json({
+      id: p.id,
+      nom: p.nom,
+      prix: Number(p.prix),
+      stock: p.stock,
+      images: p.images ?? [],
+      tags: p.tags ?? [],
+      descriptions: p.descriptions,
+      poids: p.poids,
+      dimensions: p.dimensions,
+      materiaux: p.materiaux,
+      isLocation: p.isLocation,
+
+      // obligatoires
+      categorie: { nomCat: p.categorie.nomCat },
+      magasin: { nom_Magasin: p.magasin.nom_Magasin, type: p.magasin.type },
+
+      // optionnels
+      produitLocation: p.produitLocation ?? null,
+      Sponsor: p.Sponsor ?? null,
+    });
+  } catch (e) {
+    console.error("Erreur getProductById:", e);
+    return res.status(500).json({ error: "Erreur récupération produit" });
+  }
+};

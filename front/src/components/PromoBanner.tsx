@@ -3,15 +3,21 @@ import { Megaphone, Truck, Shield, HeartHandshake } from "lucide-react";
 import axios from "axios";
 import "../styles/promoBanner.css";
 import { VendorAuthModal } from '../components/vendorAuthModal';
+import { ProductDetailModal, ProductDetailData } from "./productDetailModal";
 import { StatusBadge } from "../components/StatusBadge";
 import { API_BASE_URL } from "../config/api";
 
-export function PromoBanner({ isPublicHome = false }: { isPublicHome?: boolean }) {
+export function PromoBanner({ isPublicHome = false, onAddToCart, }: { isPublicHome?: boolean, onAddToCart?: (productId: string, qty?: number) => void | Promise<void>; }) {
 
   const [slides, setSlides] = useState<any[]>([]);
   const [productIndex, setProductIndex] = useState(0);
   const [imageIndex, setImageIndex] = useState(0);
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<ProductDetailData | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
 
   // --- Load sponsors ---
   useEffect(() => {
@@ -20,6 +26,7 @@ export function PromoBanner({ isPublicHome = false }: { isPublicHome?: boolean }
 
       setSlides(
         res.data.map((item: any) => ({
+          id: item.produitId,
           title: item.title,
           desc: item.desc,
           price: item.price,
@@ -27,7 +34,7 @@ export function PromoBanner({ isPublicHome = false }: { isPublicHome?: boolean }
           tags: item.tags,
           category: item.category,
           typeProduit: item.typeProduit,
-          typePrix: item.typePrix // 🔥 ajouté depuis le back
+          typePrix: item.typePrix 
         }))
       );
     }
@@ -91,6 +98,49 @@ export function PromoBanner({ isPublicHome = false }: { isPublicHome?: boolean }
       ? "mois"
       : "";
 
+  const openDetailFromSlide = async (slide: any) => {
+    setIsDetailOpen(true);
+    setDetailLoading(true);
+    setDetailError(null);
+
+    // preview immédiat
+    setSelectedProduct({
+      id: slide.id,
+      nom: slide.title,
+      prix: slide.price,
+      stock: 0,
+      images: slide.images ?? [],
+      tags: slide.tags ?? [],
+      descriptions: slide.desc ?? "",
+      poids: 0,
+      dimensions: "",
+      materiaux: "",
+      isLocation: slide.typeProduit === "location",
+      categorie: slide.category ? { nomCat: slide.category } : undefined,
+      magasin: undefined,
+      produitLocation: null,
+      Sponsor: true, 
+    } as ProductDetailData);
+
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/getDetails/${slide.id}`);
+      const data = res.data.product ?? res.data;
+      setSelectedProduct(data);
+    } catch (e) {
+      console.error("Erreur chargement détails sponsor", e);
+      setDetailError("Impossible de charger les détails.");
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const closeDetail = () => {
+    setIsDetailOpen(false);
+    setSelectedProduct(null);
+    setDetailLoading(false);
+    setDetailError(null);
+  };
+  
   return (
     <>
       <div className="promo-banner">
@@ -169,7 +219,9 @@ export function PromoBanner({ isPublicHome = false }: { isPublicHome?: boolean }
           </div>
 
           <div className="promo-buttons">
-            <button className="promo-btn">Voir le produit →</button>
+            <button className="promo-btn"
+              onClick={() => openDetailFromSlide(slide)}
+            >Voir le produit →</button>
 
             {isPublicHome && (
               <button
@@ -191,7 +243,16 @@ export function PromoBanner({ isPublicHome = false }: { isPublicHome?: boolean }
           }}
         />
       </div>
-
+      {isDetailOpen && (
+        <ProductDetailModal
+          product={selectedProduct}
+          loading={detailLoading}
+          error={detailError}
+          onClose={closeDetail}
+          onAddToCart={(id, qty) => onAddToCart?.(id, qty)}
+        />
+      )}
+      
       {/* STRIP ICONES */}
       <div className="bg-white border-b mt-0">
         <div className="container mx-auto px-4 py-6">
