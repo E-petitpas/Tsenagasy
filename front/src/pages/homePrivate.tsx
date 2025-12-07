@@ -64,7 +64,7 @@ export default function HomePrivate({currentUser, cartItemCount, onAddToCart, se
 
         {/* ---------------- PRODUITS ---------------- */}
         <ProductGrid
-          onAddToCart={onAddToCart}
+          onAddToCart={onAddToCart} userId={currentUser.id}
         />
 
         {/* ---------------- QUICK SERVICES (adapté connecté) ---------------- */}

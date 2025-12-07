@@ -27,6 +27,8 @@ model Utilisateur {
   paniers    Panier[]
   livraisons Livraison[] @relation("LivreurLivraison")
 
+  favoris Favori[]
+
   @@map("users")
 }
 
@@ -83,6 +85,8 @@ model Produit {
   lignePaniers    LignePanier[]
   produitLocation ProduitLocation?
   Sponsor         Sponsor?         @relation("ProduitSponsor")
+
+  favoris Favori[]
 
   @@map("produits")
 }
@@ -144,6 +148,23 @@ model LignePanier {
   panier        Panier  @relation(fields: [idPanier], references: [id], onDelete: Cascade)
 
   @@map("ligne_panier")
+}
+
+//
+// ==========================
+// FAVORI
+// ==========================
+model Favori {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @db.Uuid
+  produitId String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  user    Utilisateur @relation(fields: [userId], references: [id], onDelete: Cascade)
+  produit Produit     @relation(fields: [produitId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, produitId]) // empêche doublons
+  @@map("favoris")
 }
 
 //

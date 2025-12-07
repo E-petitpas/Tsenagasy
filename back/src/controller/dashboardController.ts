@@ -282,3 +282,25 @@ export const getProductDetailsById = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Erreur récupération produit" });
   }
 };
+
+//getFavStat d'un user
+export const getFavCountByUser = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ error: "userId requis." });
+    }
+
+    const favCount = await prisma.favori.count({
+      where: { userId },
+    });
+
+    return res.status(200).json({ count: favCount });
+
+  } catch (error) {
+    console.error("Erreur getFavCountByUser:", error);
+    return res.status(500).json({ error: "Erreur récupération nombre favoris." });
+  }
+};
+

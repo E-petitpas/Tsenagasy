@@ -45,6 +45,12 @@ router.get('/admin/stats', dashboard.getAdminStats); //ok
 router.get('/api/user/:userId', dashboard.getUserProfile); //ok
 router.get('/api/sponsor', dashboard.getAllSponsoredProducts); //ok
 router.get('/api/getAllproduct', dashboard.getAllProducts); //ok
-router.get('/api/getDetails/:id', dashboard.getProductDetailsById);
+router.get('/api/getDetails/:id', dashboard.getProductDetailsById); //ok
+router.get('/api/favCount/:userId', dashboard.getFavCountByUser); //ok
+
+import * as commandes from '../controller/panierController'
+router.post('/api/addFavori/:userId', commandes.addFavori); //ok
+router.delete('/api/removeFav/:userId/:produitId', commandes.removeFavori); //ok
+router.get('/api/getFavByUser/:userId', commandes.getFavorisByUser); //ok
 
 export default router;

@@ -9,9 +9,10 @@ import { API_BASE_URL } from "../config/api";
 
 interface ProductGridProps {
   onAddToCart?: (productId: string, qty?: number) => void | Promise<void>;
+  userId?: string;
 }
 
-export function ProductGrid({ onAddToCart }: ProductGridProps) {
+export function ProductGrid({ onAddToCart, userId }: ProductGridProps) {
   const [products, setProducts] = useState<ProductCardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,14 +43,32 @@ export function ProductGrid({ onAddToCart }: ProductGridProps) {
     loadProducts();
   }, []);
 
+  useEffect(() => {
+    if (!userId) return; // si public => rien
+
+    const loadFavs = async () => {
+      try {
+        const res = await axios.get<any[]>(
+          `${API_BASE_URL}/api/getFavByUser/${userId}`
+        );
+
+        const map: Record<string, boolean> = {};
+        res.data.forEach((p) => (map[p.id] = true));
+        setFavorites(map);
+      } catch (e) {
+        console.error("Erreur loadFavs", e);
+      }
+    };
+
+    loadFavs();
+  }, [userId]);
+  
   const openModal = async (id: string) => {
     // 1) ouvrir tout de suite
     setIsModalOpen(true);
     setModalLoading(true);
     setModalError(null);
 
-    // 2) optionnel mais conseillé : mettre un “preview” rapide
-    // pour afficher quelque chose dès l’ouverture
     const preview = products.find(p => p.id === id);
     if (preview) {
       setSelectedProduct({
@@ -93,8 +112,25 @@ export function ProductGrid({ onAddToCart }: ProductGridProps) {
     setModalError(null);
   };
 
-  const toggleFavorite = (id: string) => {
-    setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleFavorite = async (produitId: string) => {
+    if (!userId) return; // public => pas de back
+
+    const isFav = !!favorites[produitId];
+
+    // UI instantanée
+    setFavorites((prev) => ({ ...prev, [produitId]: !isFav }));
+
+    try {
+      if (!isFav) {
+        await axios.post(`${API_BASE_URL}/api/addFavori/${userId}`, { produitId });
+      } else {
+        await axios.delete(`${API_BASE_URL}/api/removeFav/${userId}/${produitId}`);
+      }
+    } catch (e) {
+      console.error("Erreur toggleFavorite", e);
+      // rollback si erreur
+      setFavorites((prev) => ({ ...prev, [produitId]: isFav }));
+    }
   };
 
   if (loading) {
@@ -135,12 +171,12 @@ export function ProductGrid({ onAddToCart }: ProductGridProps) {
               <ProductCard
                 key={product.id}
                 product={product}
-                onProductClick={openModal} // ✅ ICI
+                onProductClick={openModal} 
                 onAddToCart={(id) => onAddToCart?.(id, 1)}
 
-                // ✅ AJOUT favoris
+                // AJOUT favoris
                 isFavorite={!!favorites[product.id]}
-                onToggleFavorite={toggleFavorite}
+                onToggleFavorite={userId ? toggleFavorite : undefined}
               />
             ))}
           </div>
@@ -156,7 +192,7 @@ export function ProductGrid({ onAddToCart }: ProductGridProps) {
           onClose={closeModal}
           onAddToCart={(id, qty) => onAddToCart?.(id, qty)}
           isFavorite={selectedProduct ? !!favorites[selectedProduct.id] : false}
-          onToggleFavorite={toggleFavorite}
+          onToggleFavorite={userId ? toggleFavorite : undefined}
         />
       )}
     </>

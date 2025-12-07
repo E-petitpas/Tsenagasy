@@ -13,6 +13,10 @@ import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { StatusBadge } from "../components/StatusBadge";
 import { RechargeWalletModal } from "../components/RechargeWalletModal";
 import { toast } from "sonner";
+import { ProductDetailModal } from "../components/productDetailModal";
+import axios from "axios";
+import { API_BASE_URL } from "../config/api";
+import Swal from "sweetalert2";
 
 interface ClientDashboardPageProps {
   profileUser: ProfileUser | null;
@@ -68,14 +72,6 @@ const demoOrders = [
   },
 ];
 
-const demoWishlist = [
-  { id: "1", name: "Collier Perles Madagascar", price: 85000, image: "💎" },
-  { id: "2", name: "Thé Vanilla Premium", price: 35000, image: "🫖" },
-  { id: "3", name: "Broderie Silk Malgache", price: 120000, image: "🧵" },
-  { id: "4", name: "Broderie Silk Malgache", price: 120000, image: "🧵" },
-  { id: "5", name: "Broderie Silk Malgache", price: 120000, image: "🧵" },
-];
-
 const demoRecommendations = [
   { id: "1", name: "Miel de Litchi Bio", price: 25000, image: "🍯", rating: 4.8 },
   { id: "2", name: "Épices Romazava Mix", price: 15000, image: "🌶️", rating: 4.9 },
@@ -87,9 +83,13 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
   const navigate = useNavigate();
   const [walletBalance, setWalletBalance] = useState(25000);
   const [isRechargeModalOpen, setIsRechargeModalOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-
+  const [wishlist, setWishlist] = useState<any[]>([]);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
   const isVendor = profileUser?.role === "vendor";
+  const [isFavModalOpen, setIsFavModalOpen] = useState(false);
+  const [favSelectedProduct, setFavSelectedProduct] = useState<any | null>(null);
+  const [favCount, setFavCount] = useState(0);
+  const [favCountLoading, setFavCountLoading] = useState(false);
 
   const [name, setName] = useState(profileUser?.name ?? "");
   const [email, setEmail] = useState(profileUser?.email ?? "");
@@ -113,9 +113,41 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
   }, [activeTab]);
   
   useEffect(() => {
-  console.log("profileUser reçu dans ClientDashboardPage:", profileUser);
-}, [profileUser]);
-  
+    if (!profileUser?.id) return;
+
+    const loadFavCount = async () => {
+      try {
+        setFavCountLoading(true);
+        const res = await axios.get(
+          `${API_BASE_URL}/api/favCount/${profileUser.id}`
+        );
+        setFavCount(res.data?.count ?? 0);
+      } catch (e) {
+        console.error("Erreur chargement favCount", e);
+        setFavCount(0);
+      } finally {
+        setFavCountLoading(false);
+      }
+    };
+
+    loadFavCount();
+    
+    const loadWishlist = async () => {
+      try {
+        setWishlistLoading(true);
+        const res = await axios.get(
+          `${API_BASE_URL}/api/getFavByUser/${profileUser.id}`
+        );
+        setWishlist(res.data || []);
+      } catch (e) {
+        console.error("Erreur chargement favoris", e);
+      } finally {
+        setWishlistLoading(false);
+      }
+    };
+
+    loadWishlist();
+  }, [profileUser?.id]);
   
   const [transactions, setTransactions] = useState([
     {
@@ -134,6 +166,93 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
     },
   ]);
 
+  type WishlistItemCard = {
+    id: string;
+    nom: string;
+    prix: number;
+    image?: string;
+    categorie?: string;
+    magasin?: string;
+    isLocation?: boolean;
+    typePrix?: string;
+  };
+
+  const wishlistCards: WishlistItemCard[] = wishlist.map((p: any) => ({
+    id: p.id,
+    nom: p.nom,
+    prix: p.prix,
+    image: p.images?.[0],
+    categorie: p.categorie?.nomCat,
+    magasin: p.magasin?.nom_Magasin,
+    isLocation: p.isLocation,
+    typePrix: p.produitLocation?.typePrix,
+  }));
+
+  const openFavModal = (id: string) => {
+    const full = wishlist.find((p: any) => p.id === id);
+    if (!full) return;
+
+    setFavSelectedProduct(full);
+    setIsFavModalOpen(true);
+  };
+
+  const closeFavModal = () => {
+    setIsFavModalOpen(false);
+    setFavSelectedProduct(null);
+  };
+
+  const handleRemoveFav = async (produitId: string, produitNom?: string) => {
+    await Swal.fire({
+      title: "Supprimer ce favori ?",
+      text: produitNom
+        ? `Voulez-vous retirer "${produitNom}" de vos favoris ?`
+        : "Voulez-vous retirer ce produit de vos favoris ?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Oui, supprimer",
+      cancelButtonText: "Annuler",
+      showLoaderOnConfirm: true,
+      allowOutsideClick: () => !Swal.isLoading(),
+      preConfirm: async () => {
+        try {
+          await axios.delete(
+            `${API_BASE_URL}/api/removeFav/${profileUser?.id}/${produitId}`
+          );
+          return true;
+        } catch (error) {
+          console.error("Erreur suppression favori:", error);
+          Swal.showValidationMessage("Erreur lors de la suppression.");
+          return false;
+        }
+      },
+    }).then((result) => {
+      if (result.isConfirmed) {
+        // update UI
+        setWishlist((prev) => prev.filter((p) => p.id !== produitId));
+
+        toast.success("Favori supprimé avec succès !");
+        setFavCount((c) => Math.max(0, c - 1));
+      }
+    });
+  };
+
+  const formatTypePrix = (typePrix?: string) => {
+    if (!typePrix) return "";
+
+    switch (typePrix) {
+      case "journalier":
+        return "jour";
+      case "hebdomadaire":
+        return "semaine";
+      case "mensuel":
+        return "mois";
+      default:
+        return "";
+    }
+  };
+  
  const renderDashboard = () => (
     <>
       {/* --- CARDS PRINCIPALES --- */}
@@ -176,7 +295,7 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
                 <Heart className="h-6 w-6" style={{ color: "#EC4899" }}/>
               </div>
               <div>
-                <div className="text-3xl font-bold">{demoWishlist.length}</div>
+                <div className="text-3xl font-bold">{favCountLoading ? 0 : favCount}</div>
                 <p className="text-xs text-pink-100 mt-1 opacity-90">
                   Produits aimés
                 </p>
@@ -272,11 +391,10 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
   );
 
   const renderWishlist = () => (
+    <>
     <Card
       className="shadow-md"
-      style={{
-        borderLeft: "4px solid #ec4899", // rose principal
-      }}
+      style={{ borderLeft: "4px solid #ec4899" }} // rose principal
     >
       {/* HEADER */}
       <CardHeader
@@ -285,10 +403,7 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
           borderBottom: "1px solid #fbcfe8",
         }}
       >
-        <CardTitle
-          className="flex items-center"
-          style={{ color: "#db2777" }}
-        >
+        <CardTitle className="flex items-center" style={{ color: "#db2777" }}>
           <Heart className="h-5 w-5 mr-2" style={{ color: "#db2777" }} />
           Ma liste de souhaits
         </CardTitle>
@@ -296,69 +411,144 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
 
       {/* CONTENU */}
       <CardContent>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {demoWishlist.map((item) => (
-            <div
-              key={item.id}
-              className="rounded-lg p-4 hover:shadow-lg hover:scale-105 transition relative"
-              style={{
-                backgroundColor: "#fdf2f8",
-                border: "1px solid #fbcfe8",
-              }}
-            >
+        {wishlistLoading && <p>Chargement...</p>}
 
-              {/* ❌ BOUTON SUPPRESSION */}
-              <button
-                onClick={() => console.log("Supprimer", item.id)}
+        {!wishlistLoading && wishlistCards.length === 0 && (
+          <p className="text-gray-500">Aucun favori pour le moment.</p>
+        )}
+
+        {!wishlistLoading && wishlistCards.length > 0 && (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {wishlistCards.map((item) => (
+              <div
+                key={item.id}
+                onClick={() => openFavModal(item.id)}
+                className="rounded-lg p-4 hover:shadow-lg hover:scale-105 transition relative"
                 style={{
-                  position: "absolute",
-                  top: "8px",
-                  right: "8px",
-                  width: "22px",
-                  height: "22px",
-                  borderRadius: "50%",
-                  backgroundColor: "white",
-                  border: "1px solid #fca5a5", // rose/rouge clair
-                  color: "#db2777", 
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  lineHeight: "0",
+                  backgroundColor: "#fdf2f8",
+                  border: "1px solid #fbcfe8",
                 }}
               >
-                <X style={{ width: "15px", height: "15px", color: "#db2777" }} />
-              </button>
+                {/* BOUTON SUPPRESSION */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveFav(item.id, item.nom);
+                  }}
+                  style={{
+                    position: "absolute",
+                    top: "8px",
+                    right: "8px",
+                    width: "22px",
+                    height: "22px",
+                    borderRadius: "50%",
+                    backgroundColor: "white",
+                    border: "1px solid #fca5a5",
+                    color: "#db2777",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    lineHeight: "0",
+                  }}
+                >
+                  <X style={{ width: "15px", height: "15px", color: "#db2777" }} />
+                </button>
 
-              <div className="text-center mb-3">
-                <div className="text-4xl">{item.image}</div>
-                <h4 className="font-medium">{item.name}</h4>
-              </div>
+                {/* IMAGE FIXE */}
+                <div className="w-full h-32 rounded-md overflow-hidden bg-white mb-2">
+                  {item.image ? (
+                    <img
+                      src={item.image}
+                      alt={item.nom}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-3xl">
+                      📦
+                    </div>
+                  )}
+                </div>
 
-              <div className="flex justify-between">
-                <span className="font-bold" style={{ color: "#2D8A47" }}>
-                  {item.price.toLocaleString()} Ar
-                </span>
+                {/* NOM */}
+                <h4 className="font-semibold text-sm mb-1 line-clamp-2">
+                  {item.nom}
+                </h4>
 
+                {/* INFOS LÉGÈRES MAIS UTILES */}
+                <div className="text-xs text-gray-600 space-y-1 mb-2">
+                  {item.categorie && (
+                    <p>
+                      Catégorie :{" "}
+                      <span className="font-medium text-gray-700">{item.categorie}</span>
+                    </p>
+                  )}
+                  {item.magasin && (
+                    <p>
+                      Boutique :{" "}
+                      <span className="font-medium text-gray-700">{item.magasin}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* PRIX + BADGE */}
+                <div className="flex justify-between items-center mb-3">
+                  <span className="font-bold" style={{ color: "#2D8A47" }}>
+                    {item.prix.toLocaleString()} Ar
+                    {item.isLocation && item.typePrix && (
+                      <span style={{ fontSize: "12px", marginLeft: "4px", color: "#14532d" }}>
+                        / {formatTypePrix(item.typePrix)}
+                      </span>
+                    )}
+                  </span>
+
+                  <span
+                    className="text-[10px] font-medium"
+                    style={{ color: item.isLocation ? "#2563eb" : "#7c3aed" }}
+                  >
+                    {item.isLocation ? "Location" : "Vente"}
+                  </span>
+                </div>
+
+                {/* BOUTON AJOUTER (chaleureux, comme avant) */}
                 <Button
                   size="sm"
+                  className="w-full"
                   style={{
-                    backgroundColor: "#db2777",
+                    background: "linear-gradient(to right, #ec4899, #db2777)",
                     color: "white",
+                    borderRadius: "8px",
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation(); // ✅ empêche le modal de s'ouvrir
+                    console.log("Ajouter au panier", item.id);
                   }}
                 >
                   <ShoppingBag className="h-4 w-4 mr-1" />
                   Ajouter
                 </Button>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+            
+          </div>
+        )}
       </CardContent>
     </Card>
+    {/* ✅ MODAL EN DEHORS */}
+    {isFavModalOpen && favSelectedProduct && (
+      <ProductDetailModal
+        product={favSelectedProduct}
+        onClose={closeFavModal}
+        onAddToCart={(id, qty) => {
+          console.log("Add to cart depuis favoris", id, qty);
+        }}
+        // ✅ PAS de onToggleFavorite => coeur caché
+      />
+    )}
+  </>
   );
-
 
   const renderWallet = () => (
     <>
