@@ -20,6 +20,10 @@ app.use(express.urlencoded({ extended: true }));
 // Routes 
 app.use('/api', routes);
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+app.use(
+  "/factures",
+  express.static(path.join(process.cwd(), "src/public/factures"))
+);
 
 const PORT = process.env.PORT || 5000;
 

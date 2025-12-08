@@ -2,13 +2,15 @@
 
 import React, { useEffect } from "react";
 import { CartCheckout } from "./CartCheckout";
+import { UserData } from "../config/authStorage";
 
 interface CartModalProps {
   isOpen: boolean;
   onClose: () => void;
+  currentUser: UserData;
 }
 
-export const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
+export const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose, currentUser }) => {
   // bloque le scroll du body quand modal ouvert
   useEffect(() => {
     if (!isOpen) return;
@@ -75,7 +77,7 @@ export const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
           }}
         >
           {/* ✅ on passe inModal pour enlever le header interne */}
-          <CartCheckout onBack={onClose} inModal />
+          <CartCheckout onBack={onClose} currentUser={currentUser} inModal />
         </div>
       </div>
     </div>

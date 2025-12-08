@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Package, Star, BarChart3, Settings, LogOut, Plus, Search, Edit, Trash2, Eye, CheckCircle, XCircle, TrendingUp } from 'lucide-react';
+import { Users, Package, Star, BarChart3, Settings, LogOut, Plus, Search, Edit, Trash2, Eye, CheckCircle, XCircle, TrendingUp, ClipboardList } from 'lucide-react';
 import AddUserModal from '../components/addUserModal';
 import { UserData } from '../config/authStorage';
 import { API_BASE_URL } from '../config/api';
@@ -10,7 +10,7 @@ import Swal from 'sweetalert2';
 import { toast } from 'sonner';
 import '../styles/AdminDashboard.css';
 
-type TabType = 'overview' | 'accounts' | 'products' | 'sponsors';
+type TabType = 'overview' | 'accounts' | 'products' | 'sponsors' | 'orders';
 
 type AdminDashboardProps = {
   currentUser: UserData;
@@ -42,17 +42,7 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
     totalSponsors: 0
   });
 
-  const recentAccounts = [
-    { id: 1, name: 'Rakoto Jean', email: 'rakoto@email.mg', role: 'client', status: 'active', joinDate: '2024-10-15' },
-    { id: 2, name: 'Rabe Marie', email: 'rabe@email.mg', role: 'vendor', status: 'active', joinDate: '2024-10-14' },
-    { id: 3, name: 'Andrianina Paul', email: 'paul@email.mg', role: 'client', status: 'pending', joinDate: '2024-10-13' },
-  ];
-
-  const recentProducts = [
-    { id: 1, name: 'Panier artisanal', vendor: 'Rakoto Artisanat', price: 25000, stock: 15, status: 'active' },
-    { id: 2, name: 'Vanille de Madagascar', vendor: 'Épices du Sud', price: 45000, stock: 8, status: 'active' },
-    { id: 3, name: 'Lamba traditionnel', vendor: 'Tissus Malgaches', price: 85000, stock: 3, status: 'low_stock' },
-  ];
+  const [orders, setOrders] = useState<any[]>([]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentDate(new Date()), 1000);
@@ -83,6 +73,7 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
     fetchAccounts();
     fetchAdminProducts();
     fetchAdminSponsors();
+    fetchAdminOrders();
     const savedTab = sessionStorage.getItem('activeTab') as TabType | null;
     if (savedTab) {
       setActiveTab(savedTab);
@@ -104,6 +95,16 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
   useEffect(() => {
     sessionStorage.setItem('activeTab', activeTab);
   }, [activeTab]);
+  
+  //afficher les commandes
+  const fetchAdminOrders = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/admin/orders`);
+      setOrders(res.data || []);
+    } catch (e) {
+      console.error("Erreur fetch orders admin", e);
+    }
+  };
   
   //récupérer les demande d'adhésion des magasins
   const fetchAdhesionRequests = async () => {
@@ -391,6 +392,52 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
     });
   };
 
+  const handleShipOrder = async (venteId: string, factureNumero?: string) => {
+    const confirm = await Swal.fire({
+      title: "Expédier la commande ?",
+      text: `Confirmer l'expédition de la facture #${factureNumero || "—"} ?`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Oui, expédier",
+      cancelButtonText: "Annuler",
+      confirmButtonColor: "#8B5CF6",
+      cancelButtonColor: "#d33",
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    Swal.fire({
+      title: "Expédition en cours...",
+      text: "Veuillez patienter",
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+
+    try {
+      const res = await axios.put(`${API_BASE_URL}/orders/${venteId}/ship`);
+
+      // si jamais ton API renvoie { ok:false }
+      if (res.data?.ok === false) {
+        Swal.close();
+        toast.warning(res.data.message || "Impossible d'expédier.");
+        return;
+      }
+      Swal.close();
+      toast.success("Commande expédiée");
+
+      // refresh liste
+      fetchAdminOrders();
+    } catch (e: any) {
+      console.error(e);
+
+      Swal.close();
+      toast.error(e?.response?.data?.error || "Erreur expédition");
+    }
+  };
+
   // pour statistiques du dashboard
   const fetchStats = async () => {
     try {
@@ -403,8 +450,13 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
 
   const hasPendingAdhesions = adhesionRequests.some(r => r.statut === "en_attente");
   const hasPendingProducts = adminProducts.some(p => p.statut === "en_attente");
+
+  const logisticsCount = orders.filter(
+    (o) => o.statut !== "expedie" && o.statut !== "expédié"
+  ).length;
   
   const renderContent = () => {
+    
     switch (activeTab) {
       case 'overview':
         return (
@@ -428,15 +480,15 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
                   </div>
                 </div>
               
-                {/* Users actifs */}
+                {/* Logistique en cours */}
                 <div
                   className="rounded-xl p-6 shadow-md cursor-pointer text-white"
-                  style={{ backgroundColor: "#8B5CF6" }} onClick={() => setActiveTab("accounts")}
+                  style={{ backgroundColor: "#8B5CF6" }} onClick={() => setActiveTab("orders")}
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-sm opacity-90">Utilisateurs actifs</p>
-                      <p className="text-3xl font-bold mt-2">{stats.activeUsers}</p>
+                      <p className="text-sm opacity-90">Logistique en cours</p>
+                      <p className="text-3xl font-bold mt-2">{logisticsCount}</p>
                     </div>
                     <div className="bg-white bg-opacity-20 p-3 rounded-lg">
                       <Users size={24} color="#8B5CF6" />
@@ -1122,6 +1174,124 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
             />
           </div>
         );
+      
+      case "orders": {
+        const sortedOrders = [...orders].sort(
+          (a, b) => new Date(b.dateVente).getTime() - new Date(a.dateVente).getTime()
+        );
+
+        const visibleOrders = sortedOrders.filter(
+          (o) => o.statut !== "expedie" && o.statut !== "expédié"
+        );
+
+        return (
+          <div className="space-y-6">
+            <div className="section-card">
+              <h3 className="text-xl font-bold mb-4">Logistique / Commandes</h3>
+
+              {visibleOrders.length === 0 ? (
+                <p className="text-center text-gray-600">Aucune commande.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {visibleOrders.map((o) => {
+                    const totalLines = o.lignes?.length || 0;
+                    const okLines = o.lignes?.filter((l: any) => l.depotOk).length || 0;
+                    const allOk = totalLines > 0 && okLines === totalLines;
+
+                    return (
+                      <div
+                        key={o.id}
+                        className="bg-white rounded-xl shadow p-4 space-y-3 border-2"
+                        style={{ borderColor: "#8B5CF6" }}
+                      >
+                        {/* HEADER FACTURE */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-bold text-lg">
+                              Facture #{o.facture_numero || "—"}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {new Date(o.dateVente).toLocaleDateString("fr-FR")}
+                            </p>
+                          </div>
+                          <StatusBadge status={o.statut} />
+                        </div>
+
+                        {/* CLIENT */}
+                        <div className="text-sm">
+                          <p className="font-medium">
+                            {o.user?.nom} — {o.user?.email}
+                          </p>
+                          <p className="text-gray-500">{o.user?.tel}</p>
+                          <p className="text-gray-500">{o.user?.adresse}</p>
+                        </div>
+
+                        {/* CHECKLIST RESUMÉ */}
+                        <div className="flex items-center justify-between bg-gray-50 p-2 rounded text-sm">
+                          <span>Articles déposés</span>
+                          <span className={`font-semibold ${allOk ? "text-green-600" : "text-orange-600"}`}>
+                            {okLines}/{totalLines}
+                          </span>
+                        </div>
+
+                        {/* LIGNES */}
+                        <div className="border-t pt-3 space-y-2">
+                          <p className="font-semibold text-sm">Détails</p>
+
+                          <div className="space-y-1">
+                            {o.lignes.map((l: any) => (
+                              <div
+                                key={l.id}
+                                className="flex items-center justify-between text-sm bg-gray-50 p-2 rounded"
+                              >
+                                <div>
+                                  <p className="font-medium">{l.produit?.nom}</p>
+                                  <p className="text-gray-500">
+                                    Magasin: {l.magasin?.nom_Magasin} • Qté: {l.quantite}
+                                  </p>
+                                </div>
+
+                                {/* petit état visuel */}
+                                <span
+                                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    l.depotOk
+                                      ? "bg-green-100 text-green-700"
+                                      : "bg-yellow-100 text-yellow-700"
+                                  }`}
+                                >
+                                  {l.depotOk ? "Déposé" : "En attente"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* FOOTER BOUTON (désactivé et sans action pour l’instant) */}
+                        <div className="pt-2">
+                          <button
+                            onClick={() => handleShipOrder(o.id, o.facture_numero)}
+                            disabled={!allOk}
+                            className={`w-full py-2 rounded-lg font-medium transition ${
+                              allOk ? "cursor-pointer" : "cursor-not-allowed"
+                            }`}
+                            style={{
+                              backgroundColor: "#8B5CF6",
+                              opacity: allOk ? 1 : 0.65,
+                              color: "#fff"
+                            }}
+                          >
+                            Expédier
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
 
       default:
         return null;
@@ -1148,6 +1318,7 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
               { id: 'accounts', label: 'Comptes', icon: <Users size={20} /> },
               { id: 'products', label: 'Produits', icon: <Package size={20} /> },
               { id: 'sponsors', label: 'Sponsors', icon: <Star size={20} /> },
+              { id: 'orders', label: 'Logistique', icon: <ClipboardList size={20} /> },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -1188,6 +1359,7 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
               {activeTab === 'accounts' && "Gestion des comptes"}
               {activeTab === 'products' && "Gestion des produits"}
               {activeTab === 'sponsors' && "Gestion des sponsors"}
+              {activeTab === 'orders' && "Logistique / Commandes"}
             </h2>
             <p>Plateforme d'administration Tsena.mg</p>
           </div>

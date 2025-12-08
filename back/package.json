@@ -17,7 +17,9 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
-    "multer": "^2.0.2"
+    "multer": "^2.0.2",
+    "nodemailer": "^7.0.11",
+    "pdfkit": "^0.17.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
@@ -25,6 +27,8 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.0.0",
     "@types/node": "^24.3.1",
+    "@types/nodemailer": "^7.0.4",
+    "@types/pdfkit": "^0.17.4",
     "concurrently": "^9.2.1",
     "nodemon": "^3.1.10",
     "prisma": "^6.16.0",

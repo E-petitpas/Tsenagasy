@@ -58,15 +58,15 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
       borderColor = "#245A35";
       break;
     case "processing":
-    case "en traitement":
+    case "en_preparation":
       label = "En traitement";
       bgColor = "#3B82F6" // bleu vif
       textColor = "#FFFFFF";
       borderColor = "#2563EB";
       break;
-    case "expédié":
+    case "expedie":
     case "livré":
-      label = normalized === "expédié" ? "Expédié" : "Livré";
+      label = normalized === "expedie" ? "Expédié" : "Livré";
       bgColor = "#9F7AEA"; // violet vif
       textColor = "#6B21A8";
       borderColor = "#8B5CF6";

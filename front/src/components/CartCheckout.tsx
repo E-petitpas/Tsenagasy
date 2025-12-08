@@ -9,15 +9,37 @@ import { ImageWithFallback } from './figma/ImageWithFallback';
 import { toast } from "sonner";
 import { useCart } from "../context/cartContext";
 import Swal from "sweetalert2";
+import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
+import { UserData } from '../config/authStorage';
+import { getCartApi } from "../services/cartServices";
 
 interface CartCheckoutProps {
   onBack: () => void;
+  currentUser: UserData;
   inModal?: boolean;
 }
 
-export function CartCheckout({ onBack, inModal = false }: CartCheckoutProps) {
-  const { cart, loading, error, updateQty, removeFromCart } = useCart();
+export function CartCheckout({ onBack, currentUser, inModal = false }: CartCheckoutProps) {
+  const { cart, loading, error, updateQty, removeFromCart, refreshCart } = useCart();
   const lignes = cart?.lignes ?? [];
+  const [shipping, setShipping] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    address: "",
+    city: "",
+    district: "",
+  });
+
+  const [isOrdering, setIsOrdering] = useState(false);
+
+  const isShippingValid =
+    shipping.firstName.trim() &&
+    shipping.lastName.trim() &&
+    shipping.phone.trim() &&
+    shipping.address.trim() &&
+    shipping.city.trim() && shipping.district;
 
   // seulement 2 étapes
   const [step, setStep] = useState<'cart' | 'shipping'>('cart');
@@ -79,6 +101,51 @@ export function CartCheckout({ onBack, inModal = false }: CartCheckoutProps) {
     }
   };
 
+  async function createOrder() {
+    if (!cart || lignes.length === 0) throw new Error("Panier vide");
+    if (!currentUser?.id) throw new Error("Utilisateur non connecté");
+
+    const adresse_livraison =
+      `${shipping.address}, ${shipping.district}, ${shipping.city}`;
+
+    const payload = {
+      panierId: cart.id,
+      idUser: currentUser.id,
+      adresse_livraison,
+      contact_phone: shipping.phone,
+      mode: "standard",
+      frais_livraison: deliveryFee,
+      total,
+    };
+
+    const { data } = await axios.post(`${API_BASE_URL}/add/order`, payload);
+    return data; // venteId etc
+  }
+
+  const handlePlaceOrder = async () => {
+    if (!isShippingValid) {
+      toast.error("Merci de remplir tous les champs obligatoires");
+      return;
+    }
+
+    setIsOrdering(true);
+    try {
+      const order = await createOrder();
+
+      toast.success("Commande créée");
+      await refreshCart();
+      // - revenir au panier
+      setStep("cart");
+
+      // onBack();
+
+    } catch (e: any) {
+      toast.error(e.message || "Erreur création commande");
+    } finally {
+      setIsOrdering(false);
+    }
+  };
+  
   // ---------------------------------------
   // ÉTAPE 1 : PANIER
   // ---------------------------------------
@@ -310,32 +377,50 @@ export function CartCheckout({ onBack, inModal = false }: CartCheckoutProps) {
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="firstName" className="block mb-2">Prénom</Label>
-                      <Input id="firstName" placeholder="Votre prénom" />
+                      <Input id="firstName" placeholder="Votre prénom"  value={shipping.firstName}
+                        onChange={(e) =>
+                          setShipping((s) => ({ ...s, firstName: e.target.value }))
+                        }/>
                     </div>
                     <div>
                       <Label htmlFor="lastName" className="block mb-2">Nom</Label>
-                      <Input id="lastName" placeholder="Votre nom" />
+                      <Input id="lastName" placeholder="Votre nom" value={shipping.lastName}
+                        onChange={(e) =>
+                          setShipping((s) => ({ ...s, lastName: e.target.value }))
+                        }/>
                     </div>
                   </div>
 
                   <div>
                     <Label htmlFor="phone" className="block mb-2">Téléphone</Label>
-                    <Input id="phone" placeholder="+261 xx xxx xx xx" />
+                    <Input id="phone" placeholder="+261 xx xxx xx xx" value={shipping.phone}
+                      onChange={(e) =>
+                        setShipping((s) => ({ ...s, phone: e.target.value }))
+                      }/>
                   </div>
 
                   <div>
                     <Label htmlFor="address" className="block mb-2">Adresse complète</Label>
-                    <Input id="address" placeholder="Lot, rue, quartier..." />
+                    <Input id="address" placeholder="Lot, rue, quartier..." value={shipping.address}
+                      onChange={(e) =>
+                        setShipping((s) => ({ ...s, address: e.target.value }))
+                      }/>
                   </div>
 
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="city" className="block mb-2">Ville</Label>
-                      <Input id="city" placeholder="Antananarivo" />
+                      <Input id="city" placeholder="Antananarivo" value={shipping.city}
+                        onChange={(e) =>
+                          setShipping((s) => ({ ...s, city: e.target.value }))
+                        }/>
                     </div>
                     <div>
                       <Label htmlFor="district" className="block mb-2">District/Commune</Label>
-                      <Input id="district" placeholder="Votre district" />
+                      <Input id="district" placeholder="Votre district" value={shipping.district}
+                        onChange={(e) =>
+                          setShipping((s) => ({ ...s, district: e.target.value }))
+                        }/>
                     </div>
                   </div>
 
@@ -394,17 +479,10 @@ export function CartCheckout({ onBack, inModal = false }: CartCheckoutProps) {
                 {/* ✅ bouton PayPal placeholder */}
                 <Button
                   className="w-full mt-3 bg-[#2D8A47] hover:bg-[#245A35]"
-                  onClick={() => {
-                    // TODO: ici tu brancheras PayPal plus tard
-                    console.log("Paiement PayPal...");
-                    toast.success("Téléchargement de la facture...");
-                    // Exemple futur :
-                    // await createOrder()
-                    // await paypalCheckout()
-                    // setCartItems([])
-                  }}
+                  onClick={handlePlaceOrder}
+                  disabled={isOrdering}
                 >
-                  Payer avec PayPal
+                  {isOrdering ? "Création..." : "Payer avec PayPal"}
                 </Button>
 
                 <p className="text-xs text-gray-500 text-center">

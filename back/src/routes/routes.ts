@@ -57,4 +57,15 @@ router.get('/api/getPanierByUser/:userId', panier.getPanierByUser); //ok
 router.delete('/api/removeLine/:userId/:lineId', panier.removeLinePanier) //ok
 router.put('/api/updatePanier/:userId', panier.updatePanier); //ok
 
+import * as commande from '../controller/orderController'
+router.post('/add/order', commande.createOrder); //ok
+router.get('/orders/:userId', commande.getMyOrders); //ok
+router.delete('/orders/:orderId', commande.deleteOrder); //ok
+
+import * as order from '../controller/adminOrder'
+router.get('/admin/orders', order.getAllOrdersAdmin); //ok
+router.put('/orders/:venteId/ship', order.shipOrderAdmin); //ok
+router.get('/vendor/lignes-vente/:magasinId/pending', order.getPendingLinesForVendor); //ok
+router.put('/vendor/ligne-vente/:lineId/check', order.checkLineVendor); //ok
+
 export default router;

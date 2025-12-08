@@ -43,6 +43,7 @@ export default function HomePrivate({currentUser, onLogout }: HomePrivateProps) 
       {/* MODAL PANIER FLOTTANT */}
       <CartModal
         isOpen={isCartOpen}
+        currentUser={currentUser}
         onClose={() => setIsCartOpen(false)}
       />
 

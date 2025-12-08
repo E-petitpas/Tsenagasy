@@ -28,6 +28,7 @@ model Utilisateur {
   livraisons Livraison[] @relation("LivreurLivraison")
 
   favoris Favori[]
+  Vente   Vente[]
 
   @@map("users")
 }
@@ -37,13 +38,14 @@ model Utilisateur {
 // MAGASIN
 // ==========================
 model Magasin {
-  id_magasin      String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id_magasin      String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nom_Magasin     String
   type            String
-  id_proprietaire String      @db.Uuid
-  statut          String      @default("en-attente")
-  proprietaire    Utilisateur @relation(fields: [id_proprietaire], references: [id])
+  id_proprietaire String       @db.Uuid
+  statut          String       @default("en-attente")
+  proprietaire    Utilisateur  @relation(fields: [id_proprietaire], references: [id])
   produits        Produit[]
+  LigneVente      LigneVente[]
 
   @@map("magasins")
 }
@@ -86,7 +88,8 @@ model Produit {
   produitLocation ProduitLocation?
   Sponsor         Sponsor?         @relation("ProduitSponsor")
 
-  favoris Favori[]
+  favoris    Favori[]
+  LigneVente LigneVente[]
 
   @@map("produits")
 }
@@ -173,17 +176,47 @@ model Favori {
 // VENTE
 // ==========================
 model Vente {
-  id         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  dateVente  DateTime   @default(now())
-  total      Decimal    @db.Decimal(12, 2)
-  statut     String     @default("en attente")
-  idPanier   String     @db.Uuid
-  idPaiement String?    @db.Uuid
-  panier     Panier     @relation(fields: [idPanier], references: [id])
-  paiement   Paiement?
-  livraison  Livraison?
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dateVente DateTime @default(now())
+  total     Decimal  @db.Decimal(12, 2)
+  statut    String   @default("en_preparation")
+  idPanier  String   @db.Uuid
+
+  facture_numero String? @unique
+  facture_url    String?
+
+  idUser String      @db.Uuid
+  user   Utilisateur @relation(fields: [idUser], references: [id])
+  panier Panier      @relation(fields: [idPanier], references: [id])
+
+  paiement  Paiement?
+  livraison Livraison?
+
+  lignes LigneVente[]
 
   @@map("ventes")
+}
+
+model LigneVente {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  venteId   String @db.Uuid
+  produitId String @db.Uuid
+  magasinId String @db.Uuid
+
+  quantite      Int
+  prix_Unitaire Decimal @db.Decimal(12, 2)
+  total         Decimal @db.Decimal(12, 2)
+
+  depotOk Boolean   @default(false) // admin a reçu ces articles
+  depotAt DateTime?
+
+  vente   Vente   @relation(fields: [venteId], references: [id], onDelete: Cascade)
+  produit Produit @relation(fields: [produitId], references: [id])
+  magasin Magasin @relation(fields: [magasinId], references: [id_magasin])
+
+  @@unique([venteId, produitId])
+  @@map("ligne_vente")
 }
 
 //
@@ -191,18 +224,19 @@ model Vente {
 // LIVRAISON
 // ==========================
 model Livraison {
-  id                String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   adresse_livraison String
+  contact_phone     String       @db.VarChar(20)
   mode              String // standard | express | point relais
   date_prevue       DateTime?
   date_effective    DateTime?
-  statut            String      @default("préparée") // modifiable
-  paiement_collecte Boolean     @default(false)
-  frais_livraison   Decimal     @db.Decimal(12, 2)
-  idVente           String      @unique @db.Uuid
-  idUser            String      @db.Uuid // livreur
-  vente             Vente       @relation(fields: [idVente], references: [id])
-  livreur           Utilisateur @relation("LivreurLivraison", fields: [idUser], references: [id])
+  statut            String       @default("préparée") // modifiable
+  paiement_collecte Boolean      @default(false)
+  frais_livraison   Decimal      @db.Decimal(12, 2)
+  idVente           String       @unique @db.Uuid
+  idUser            String?      @db.Uuid // livreur
+  vente             Vente        @relation(fields: [idVente], references: [id], onDelete: Cascade)
+  livreur           Utilisateur? @relation("LivreurLivraison", fields: [idUser], references: [id])
 
   @@map("livraisons")
 }
@@ -219,7 +253,7 @@ model Paiement {
   statut         String   @default("en attente") // validé | échoué | remboursé
   transaction_id String?
   idVente        String   @unique @db.Uuid
-  vente          Vente    @relation(fields: [idVente], references: [id])
+  vente          Vente    @relation(fields: [idVente], references: [id], onDelete: Cascade)
 
   @@map("paiements")
 }

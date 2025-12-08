@@ -43,42 +43,34 @@ type ProfileUser = {
   | "client-wallet"
   | "client-profile";
 
-const demoOrders = [
-  {
-    id: "1",
-    date: "2024-01-15",
-    status: "livré",
-    total: 125000,
-    items: [
-      { name: "Lamba Mena Traditionnel", price: 75000, quantity: 1 },
-      { name: "Panier en Raphia", price: 50000, quantity: 1 },
-    ],
-  },
-  {
-    id: "2",
-    date: "2024-01-10",
-    status: "shipping",
-    total: 95000,
-    items: [
-      { name: "Huile Essentielle Ylang-Ylang", price: 45000, quantity: 2 },
-      { name: "Savon Naturel Coco", price: 5000, quantity: 1 },
-    ],
-  },
-  {
-    id: "3",
-    date: "2024-01-05",
-    status: "processing",
-    total: 200000,
-    items: [{ name: "Sculpture Bois de Rose", price: 200000, quantity: 1 }],
-  },
-];
+type Order = {
+  id: string;                        // toujours présent (getMyOrders)
+  dateVente: string;
+  statut: string;
+  total: number;
+  facture_numero?: string | null;
+  facture_url?: string | null;
 
-const demoRecommendations = [
-  { id: "1", name: "Miel de Litchi Bio", price: 25000, image: "🍯", rating: 4.8 },
-  { id: "2", name: "Épices Romazava Mix", price: 15000, image: "🌶️", rating: 4.9 },
-  { id: "3", name: "Chapeau Raphia", price: 45000, image: "👒", rating: 4.7 },
-];
+  livraison?: {
+    adresse_livraison: string;
+    contact_phone: string;
+    mode: string;
+    frais_livraison?: number;
+  } | null;
 
+  paiement?: {
+    mode: string;
+    statut: string;
+  } | null;
+
+  lignes: Array<{
+    id: string;
+    quantite: number;
+    prix_Unitaire: number;
+    total: number;
+    produit: { nom: string };
+  }>;
+};
 
 export default function ClientDashboardPage({ profileUser, activeTab, onChangeTab }: ClientDashboardPageProps) {
   // const [walletBalance, setWalletBalance] = useState(25000);
@@ -93,6 +85,8 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
   const { addToCart } = useCart();
   const [addingFavIds, setAddingFavIds] = useState<Set<string>>(new Set());
   const [addedFavIds, setAddedFavIds] = useState<Set<string>>(new Set());
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
 
   const [name, setName] = useState(profileUser?.name ?? "");
   const [email, setEmail] = useState(profileUser?.email ?? "");
@@ -117,7 +111,7 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
   
   useEffect(() => {
     if (!profileUser?.id) return;
-
+    //stat fav
     const loadFavCount = async () => {
       try {
         setFavCountLoading(true);
@@ -134,7 +128,22 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
     };
 
     loadFavCount();
-    
+    //commandes
+    const loadOrders = async () => {
+      try {
+        setOrdersLoading(true);
+        const res = await axios.get(`${API_BASE_URL}/orders/${profileUser.id}`);
+        setOrders(res.data || []);
+      } catch (e) {
+        console.error("Erreur chargement commandes", e);
+        setOrders([]);
+      } finally {
+        setOrdersLoading(false);
+      }
+    };
+
+    loadOrders();
+    //fav
     const loadWishlist = async () => {
       try {
         setWishlistLoading(true);
@@ -267,8 +276,8 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
   setAddingFavIds(prev => new Set(prev).add(produitId));
 
   try {
-    // ✅ si modal -> qty est passé
-    // ✅ si bouton simple -> qty reste 1
+    // si modal -> qty est passé
+    // si bouton simple -> qty reste 1
     await addToCart(produitId, qty);
 
     setAddingFavIds(prev => {
@@ -278,9 +287,6 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
     });
 
     setAddedFavIds(prev => new Set(prev).add(produitId));
-
-    // ❌ PAS de toast ici (sinon tu en as 2)
-    // toast.success("Ajouté au panier");
 
     setTimeout(() => {
       setAddedFavIds(prev => {
@@ -299,7 +305,78 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
 
     console.error(e);
   }
-};
+  };
+  
+  const downloadFacture = async (url?: string | null, factureNumero?: string | null) => {
+    if (!url) {
+      toast.error("Facture indisponible.");
+      return;
+    }
+
+    try {
+      // base serveur SANS /api
+      const SERVER_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, "");
+
+      const isAbsolute = /^https?:\/\//i.test(url);
+      const clean = url.replace(/^\/+/, "");
+      const fullUrl = isAbsolute ? url : `${SERVER_BASE_URL}/${clean}`;
+
+      const res = await fetch(fullUrl);
+      if (!res.ok) {
+        console.error("PDF fetch status =", res.status, fullUrl);
+        throw new Error("Fetch PDF failed");
+      }
+
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `${factureNumero ?? "facture"}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      console.error(e);
+      toast.error("Impossible de télécharger la facture.");
+    }
+  };
+  
+  const handleDeleteOrder = async (orderId: string, factureNumero?: string | null) => {
+    await Swal.fire({
+      title: "Supprimer cette commande ?",
+      text: factureNumero
+        ? `Voulez-vous supprimer la commande liée à la facture "${factureNumero}" ?`
+        : "Voulez-vous supprimer cette commande ?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Oui, supprimer",
+      cancelButtonText: "Annuler",
+      showLoaderOnConfirm: true,
+      allowOutsideClick: () => !Swal.isLoading(),
+      preConfirm: async () => {
+        try {
+          await axios.delete(`${API_BASE_URL}/orders/${orderId}`);
+          return true;
+        } catch (err: any) {
+          console.error("Erreur suppression commande:", err);
+          Swal.showValidationMessage(
+            err?.response?.data?.error || "Erreur lors de la suppression."
+          );
+          return false;
+        }
+      },
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setOrders((prev) => prev.filter((o) => o.id !== orderId));
+        toast.success("Commande supprimée !");
+      }
+    });
+  };
 
  const renderDashboard = () => (
     <>
@@ -320,7 +397,7 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
                 <ShoppingBag className="h-6 w-6" style={{ color: "#3B82F6" }}/>
               </div>
               <div>
-                <div className="text-3xl font-bold">{demoOrders.length}</div>
+                <div className="text-3xl font-bold">{orders.length}</div>
                 <p className="text-xs text-blue-100 mt-1 opacity-90">
                   Commandes passées
                 </p>
@@ -362,31 +439,53 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
           </CardTitle>
         </CardHeader>
 
-        <CardContent>
+       <CardContent>
+         {!ordersLoading && orders.length === 0 && (
+            <p className="text-sm text-gray-500">
+              Aucune commande pour le moment.
+            </p>
+         )}
+         
+         {!ordersLoading && orders.length > 0 && (
           <div className="space-y-4">
-            {demoOrders.slice(0, 3).map((order) => (
+            {orders.slice(0, 3).map((order) => (
               <div
                 key={order.id}
-                className="flex items-center justify-between p-4 bg-gradient-to-r from-white to-blue-50 border border-blue-100 rounded-lg hover:shadow-md transition"
+                onClick={() => onChangeTab("client-orders")}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "12px 14px",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 12,
+                  background: "white",
+                  cursor: "pointer",
+                  transition: "0.2s",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+                }}
               >
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3">
-                    <span className="font-medium">Commande #{order.id}</span>
-                    <StatusBadge status={order.status} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontWeight: 800, color: "#1d4ed8" }}>
+                      {order.facture_numero ?? `Commande #${order.id.slice(0, 6)}`}
+                    </span>
+                    <StatusBadge status={order.statut} />
                   </div>
 
-                  <p className="text-sm text-gray-600 mt-1">
-                    {new Date(order.date).toLocaleDateString("fr-FR")} •{" "}
-                    {order.items.length} articles
-                  </p>
+                  <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+                    {new Date(order.dateVente).toLocaleDateString("fr-FR")} •{" "}
+                    {order.lignes.length} article(s)
+                  </div>
                 </div>
 
-                <div className="text-right font-bold text-blue-600">
-                  {order.total.toLocaleString()} Ar
+                <div style={{ fontWeight: 800, color: "#1d4ed8" }}>
+                  {Number(order.total).toLocaleString()} Ar
                 </div>
               </div>
             ))}
-          </div>
+           </div>
+           )}
         </CardContent>
       </Card>
     </>
@@ -395,44 +494,271 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
   const renderOrders = () => (
     <Card className="border-l-4 border-l-blue-500 shadow-md">
       <CardHeader className="bg-blue-50 to-white">
-        <CardTitle className="flex items-center text-blue-600 text-xl">
-          <ShoppingBag className="h-5 w-5 mr-2" /> Mes commandes
+        <CardTitle
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 22,
+            fontWeight: 800,
+            color: "#1d4ed8",
+            letterSpacing: 0.2,
+          }}
+        >
+          <ShoppingBag className="h-5 w-5" />
+          Mes commandes
         </CardTitle>
       </CardHeader>
 
       <CardContent>
+        {ordersLoading && <p className="mt-4 text-gray-500">Chargement...</p>}
+
+        {!ordersLoading && orders.length === 0 && (
+          <p className="mt-4 text-gray-500">Aucune commande pour le moment.</p>
+        )}
+
         <div className="space-y-4 mt-4">
+          {orders.map((o) => {
+            const fraisLivraison = Number(o.livraison?.frais_livraison ?? 0);
+            const totalGeneral = Number(o.total);
+            const totalProduits = Math.max(0, totalGeneral - fraisLivraison);
 
-          {demoOrders.map((o) => (
-            <div
-              key={o.id}
-              className="p-4 bg-white border border-blue-100 rounded-lg hover:shadow-md transition"
-            >
-              <div className="flex justify-between mb-3">
-                <div>
-                  <h3 className="font-bold text-blue-700">Commande #{o.id}</h3>
-                  <p className="text-gray-600">
-                    Passée le {new Date(o.date).toLocaleDateString("fr-FR")}
-                  </p>
-                </div>
+            return (
+              <Card
+                key={o.id}
+                className="border rounded-xl bg-white px-4 py-3 hover:shadow-md transition relative"
+                style={{
+                  borderLeft: "5px solid #2563eb",
+                }}
+              >
+                {/* BOUTON SUPPRESSION (même visuel que favoris)
+                    affiché seulement si expedie */}
+                {o.statut === "expedie" && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteOrder(o.id, o.facture_numero);
+                    }}
+                    title="Supprimer la commande"
+                    style={{
+                      position: "absolute",
+                      top: "-6px",
+                      right: "-6px",
+                      width: "22px",
+                      height: "22px",
+                      borderRadius: "50%",
+                      backgroundColor: "white",
+                      border: "1px solid #fca5a5",
+                      color: "#db2777",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      lineHeight: "0",
+                      zIndex: 5,
+                    }}
+                  >
+                    <X style={{ width: "15px", height: "15px", color: "#db2777" }} />
+                  </button>
+                )}
 
-                <div className="text-right">
-                  <StatusBadge status={o.status} />
-                  <div className="font-bold mt-1 text-blue-600">
-                    {o.total.toLocaleString()} Ar
+                {/* HEADER */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "start",
+                    marginBottom: 10,
+                  }}
+                >
+                  {/* gauche */}
+                  <div>
+                    <div style={{ fontSize: 11, color: "#6b7280" }}>Facture</div>
+                    <div style={{ fontWeight: 900, fontSize: 14, color: "#111827" }}>
+                      {o.facture_numero ?? "N/A"}
+                    </div>
+                  </div>
+
+                  {/* droite */}
+                  <div style={{ textAlign: "right", fontSize: 11, color: "#6b7280" }}>
+                    <div style={{ fontWeight: 700, color: "#374151" }}>
+                      Commande {o.id.slice(0, 6)}
+                    </div>
+                    <div style={{ marginTop: 2 }}>
+                      Date : {new Date(o.dateVente).toLocaleDateString("fr-FR")}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {o.items.map((item, i) => (
-                <div key={i} className="flex justify-between text-sm py-1">
-                  <span>{item.name} (x{item.quantity})</span>
-                  <span>{item.price.toLocaleString()} Ar</span>
+                {/* CONTENU 2 COLONNES */}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 16,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {/* GAUCHE : INFOS + TOTAUX */}
+                  <div
+                    style={{
+                      flex: "1 1 280px",
+                      fontSize: 12,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700, color: "#374151" }}>Client</div>
+                      <div>{profileUser?.name}</div>
+                      <div style={{ color: "#6b7280" }}>{profileUser?.email}</div>
+                      {profileUser?.tel && (
+                        <div style={{ color: "#6b7280" }}>{profileUser.tel}</div>
+                      )}
+                    </div>
+
+                    {/* TOTAUX */}
+                    <div style={{ marginTop: 6, borderTop: "1px solid #eee", paddingTop: 8 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: 12,
+                        }}
+                      >
+                        <span style={{ color: "#666" }}>Sous-total produits</span>
+                        <span style={{ fontWeight: 600 }}>
+                          {totalProduits.toLocaleString()} Ar
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: 12,
+                          marginTop: 4,
+                        }}
+                      >
+                        <span style={{ color: "#666" }}>Livraison</span>
+                        <span style={{ fontWeight: 600 }}>
+                          {fraisLivraison.toLocaleString()} Ar
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginTop: 6,
+                        }}
+                      >
+                        <span style={{ fontWeight: 800 }}>Total général</span>
+                        <span style={{ fontWeight: 900, fontSize: 16 }}>
+                          {totalGeneral.toLocaleString()} Ar
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* DROITE : ARTICLES */}
+                  <div
+                    style={{
+                      flex: "1.2 1 320px",
+                      background: "#f9fafb",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 10,
+                      padding: "10px 12px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#6b7280",
+                        marginBottom: 8,
+                      }}
+                    >
+                      Articles ({o.lignes.length})
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {o.lignes.map((item) => (
+                        <div
+                          key={item.id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            background: "white",
+                            border: "1px solid #eee",
+                            borderRadius: 8,
+                            padding: "6px 8px",
+                            fontSize: 12,
+                          }}
+                        >
+                          <span
+                            style={{
+                              maxWidth: "60%",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {item.produit.nom}
+                          </span>
+
+                          <span style={{ color: "#6b7280" }}>x{item.quantite}</span>
+
+                          <span style={{ fontWeight: 800 }}>
+                            {Number(item.total).toLocaleString()} Ar
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              ))}
 
-            </div>
-          ))}
+                {/* FOOTER */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginTop: 12,
+                    paddingTop: 10,
+                    borderTop: "1px solid #eee",
+                  }}
+                >
+                  <StatusBadge status={o.statut} />
+
+                  <Button
+                    size="sm"
+                    disabled={!o.facture_url}
+                    onClick={() => downloadFacture(o.facture_url, o.facture_numero)}
+                    style={{
+                      backgroundColor: o.facture_url ? "#ef4444" : "#e5e7eb",
+                      color: o.facture_url ? "white" : "#9ca3af",
+                      fontWeight: 900,
+                      fontSize: 12,
+                      height: 30,
+                      padding: "0 14px",
+                      borderRadius: 10,
+                      border: "none",
+                      cursor: o.facture_url ? "pointer" : "not-allowed",
+                      boxShadow: o.facture_url
+                        ? "0 5px 12px rgba(239,68,68,0.35)"
+                        : "none",
+                    }}
+                  >
+                    Télécharger PDF
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       </CardContent>
     </Card>

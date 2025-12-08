@@ -12,11 +12,9 @@ import {
   Package, 
   Users, 
   TrendingUp,
-  Calendar,
   Search,
   Filter,
-  Download,
-  ArrowLeft
+  CheckCircle
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -113,7 +111,8 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
     activeProducts: 0,
     validSponsors: 0
   });
-  
+  const [vendorLines, setVendorLines] = useState<any[]>([]);
+
   const currentView =
     activeView === "vendor" ? "overview" :
     activeView === "vendor-products" ? "products" :
@@ -132,6 +131,7 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
     fetchProducts();
     fetchSponsors();
     fetchStats();
+    fetchVendorLines();
     if (currentUser?.magasinId) {
       fetchPopularProducts();
     }
@@ -285,27 +285,6 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
       setViewedProduct(product);
       setIsViewProductModalOpen(true);
     }
-  };
-
-  const handleExportData = () => {
-    const data = {
-      stats: mockStats,
-      products: products,
-      orders: orders,
-      exportDate: new Date().toISOString()
-    };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `tsena-vendor-data-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    toast.success('Données exportées avec succès !');
   };
 
   const formatPrice = (price: number) => {
@@ -585,6 +564,66 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
       toast.error("Impossible de charger les statistiques");
     }
   };
+  
+  //récupérer les ligneVentes
+  const fetchVendorLines = async () => {
+    try {
+      const res = await axios.get(
+        `${API_BASE_URL}/vendor/lignes-vente/${currentUser.magasinId}/pending`
+      );
+
+      setVendorLines(res.data || []);
+    } catch (err) {
+      console.error("Erreur lignes vendeur:", err);
+      toast.error("Impossible de charger les lignes de vente");
+    }
+  };
+  
+  const handleCheckLine = async (lineId: string) => {
+    const confirm = await Swal.fire({
+      title: "Confirmer le dépôt ?",
+      text: "Le stock sera décrémenté et la ligne disparaîtra de la liste.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Oui, déposer",
+      cancelButtonText: "Annuler",
+      confirmButtonColor: "#2D8A47",
+      cancelButtonColor: "#d33",
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    // 🔒 Modal de chargement qui bloque l'UX
+    Swal.fire({
+      title: "Traitement en cours...",
+      text: "Veuillez patienter",
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+
+    try {
+    const res = await axios.put(`${API_BASE_URL}/vendor/ligne-vente/${lineId}/check`);
+
+    if (res.data?.ok === false) {
+      toast.warning(res.data.message); // ou toast.warning
+      Swal.close();
+      return;
+    }
+
+    setVendorLines(prev => prev.filter(l => l.id !== lineId));
+    Swal.close();
+    toast.success("Article marqué comme déposé");
+    await fetchProducts();
+
+  } catch (err: any) {
+    Swal.close();
+    const msg = err?.response?.data?.error || "Impossible de valider la ligne.";
+    toast.error(msg);
+  }
+};
   
   // contenu de vue d'ensemble
   const renderOverview = () => {
@@ -887,7 +926,13 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
                           <span className="text-gray-500">—</span>
                         )}
                       </TableCell>
-                      <TableCell>{product.stock > 0 ? product.stock : <span className="text-red-500">Rupture</span>}</TableCell>
+                      <TableCell>{product.stock > 0 ? (
+                        <span>{product.stock}</span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-600 text-white">
+                          Rupture
+                        </span>
+                      )}</TableCell>
                       <TableCell>{<StatusBadge status={product.status} />}</TableCell>
                       <TableCell className="text-center">
                         {product.sponsorisé ? (
@@ -1061,55 +1106,98 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
   };
 
   // contenu de commandes
-  const renderOrders = () => {
-    return (
-      <>
-        <div className="section-card">
+ const renderOrders = () => {
+  return (
+    <div className="section-card">
+      <h3 className="text-xl font-bold mb-6">Articles commandés</h3>
 
-          {/* Header */}
-          <h3 className="text-xl font-bold mb-6">Gestion des commandes</h3>
+      <div className="overflow-x-auto bg-white rounded-lg shadow">
+        <Table className="w-full table-auto">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Client</TableHead>
+              <TableHead>Produit</TableHead>
+              <TableHead>Qté</TableHead>
+              <TableHead>PU</TableHead>
+              <TableHead>Total ligne</TableHead>
+              <TableHead>Date vente</TableHead>
+              <TableHead className="text-center">Action</TableHead>
+            </TableRow>
+          </TableHeader>
 
-          {/* Table */}
-          <div className="overflow-x-auto bg-white rounded-lg shadow">
-            <Table className="w-full table-auto">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Commande</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Produits</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Paiement</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Date</TableHead>
+          <TableBody>
+            {vendorLines.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-gray-500 py-6">
+                  Aucun article en attente 🎉
+                </TableCell>
+              </TableRow>
+            ) : (
+              vendorLines.map((l) => (
+                <TableRow key={l.id}>
+                  {/* CLIENT */}
+                  <TableCell>
+                    <div className="text-sm">
+                      <div className="font-medium">{l.vente.user.nom}</div>
+                      <div className="text-gray-500">{l.vente.user.tel}</div>
+                    </div>
+                  </TableCell>
+
+                  {/* PRODUIT */}
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <ImageWithFallback
+                        src={l.produit.images?.[0]}
+                        alt={l.produit.nom}
+                        className="w-10 h-10 rounded object-cover"
+                      />
+                      <span>{l.produit.nom}</span>
+                    </div>
+                  </TableCell>
+
+                  {/* QTE */}
+                  <TableCell>{l.quantite}</TableCell>
+
+                  {/* PU */}
+                  <TableCell className="font-semibold text-[#FF9800]">{formatPrice(Number(l.prix_Unitaire))}</TableCell>
+
+                  {/* TOTAL */}
+                  <TableCell className="font-bold text-[#2D8A47]">
+                    {formatPrice(Number(l.total))}
+                  </TableCell>
+
+                  {/* DATE VENTE */}
+                  <TableCell>
+                    {new Date(l.vente.dateVente).toLocaleDateString("fr-FR")}
+                  </TableCell>
+
+                  {/* ACTION */}
+                  <TableCell className="text-center">
+                    <Button
+                      size="sm"
+                      title="Marquer comme déposé"
+                      onClick={() => handleCheckLine(l.id)}
+                      className="
+                        bg-[#2D8A47] text-white 
+                        hover:bg-[#245A35]
+                        active:bg-[#1F4A2C]
+                        px-3 py-2 rounded-full
+                        shadow-sm
+                        transition-colors
+                      "
+                    >
+                      <CheckCircle className="h-5 w-5 text-white" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {mockOrders.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-medium">{order.id}</TableCell>
-                    <TableCell>{order.customer}</TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                          {order.products.map((product, index) => (
-                          <div key={index}>{product}</div>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium text-[#2D8A47]">{formatPrice(order.total)}</TableCell>
-                    <TableCell>
-                      <span className="capitalize text-sm">{order.payment.replace('_', ' ')}</span>
-                    </TableCell>
-                    <TableCell>{<StatusBadge status={order.status} />}</TableCell>
-                    <TableCell>{order.date}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      </>
-    );
-  };
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+};
 
   // contenu d'analyse
   const renderAnalytics = () => {

@@ -286,6 +286,7 @@ export default function UserDashboard({ currentUser, onLogout }: Props) {
                 </div>
               </button>
 
+
               {/* <button
                 onClick={() => setActiveTab("vendor-analytics")}
                 className={`sub-btn ${activeTab === "vendor-analytics" ? "active" : ""}`}
