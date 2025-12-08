@@ -1,6 +1,7 @@
 // front/src/components/ProductCard.tsx
-import React from "react";
+import React, { useState } from "react";
 import { StatusBadge } from "./StatusBadge";
+import Swal from "sweetalert2";
 
 export type ProductCardData = {
   id: string;
@@ -19,7 +20,7 @@ export type ProductCardData = {
 type Props = {
   product: ProductCardData;
   onProductClick: (id: string) => void;
-  onAddToCart?: (id: string, qty?: number) => void;
+  onAddToCart?: (id: string, qty?: number) => void | Promise<void>;
   isFavorite?: boolean;
   onToggleFavorite?: (id: string) => void;
 };
@@ -27,6 +28,8 @@ type Props = {
 export const ProductCard: React.FC<Props> = ({ product, onProductClick, onAddToCart, isFavorite, onToggleFavorite, }) => {
   const hasImage = product.images?.length > 0;
   const sponsorOk = product.Sponsor?.statut === "validé";
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState(false);
 
   const getTypePrixSuffix = () => {
     if (!product.isLocation) return "";
@@ -202,10 +205,45 @@ export const ProductCard: React.FC<Props> = ({ product, onProductClick, onAddToC
         {/* Bouton */}
         {onAddToCart && (
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onAddToCart(product.id, 1);
-            }}
+            onClick={async (e) => {
+            e.stopPropagation();
+            if (adding || product.stock <= 0) return;
+
+            setAdding(true);
+
+            // ✅ SweetAlert qui fige l'UI
+            Swal.fire({
+              title: "Ajout au panier...",
+              text: "Merci de patienter",
+              allowOutsideClick: false,
+              allowEscapeKey: false,
+              showConfirmButton: false,
+              didOpen: () => {
+                Swal.showLoading();
+              },
+            });
+
+            try {
+              await onAddToCart(product.id, 1);
+
+              // ✅ petit feedback rapide
+              Swal.fire({
+                icon: "success",
+                title: "Ajouté !",
+                timer: 900,
+                showConfirmButton: false,
+              });
+            } catch (err: any) {
+              Swal.fire({
+                icon: "error",
+                title: "Erreur",
+                text: err?.response?.data?.error || err?.message || "Impossible d'ajouter au panier",
+              });
+            } finally {
+              setAdding(false);
+            }
+          }}
+          disabled={adding || product.stock <= 0}
             className="w-full font-semibold bg-white text-[#2D8A47]
                        rounded-md shadow hover:bg-[#F9FAFB] transition
                        flex items-center justify-center gap-2"

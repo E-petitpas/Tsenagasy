@@ -48,9 +48,13 @@ router.get('/api/getAllproduct', dashboard.getAllProducts); //ok
 router.get('/api/getDetails/:id', dashboard.getProductDetailsById); //ok
 router.get('/api/favCount/:userId', dashboard.getFavCountByUser); //ok
 
-import * as commandes from '../controller/panierController'
-router.post('/api/addFavori/:userId', commandes.addFavori); //ok
-router.delete('/api/removeFav/:userId/:produitId', commandes.removeFavori); //ok
-router.get('/api/getFavByUser/:userId', commandes.getFavorisByUser); //ok
+import * as panier from '../controller/panierController'
+router.post('/api/addFavori/:userId', panier.addFavori); //ok
+router.delete('/api/removeFav/:userId/:produitId', panier.removeFavori); //ok
+router.get('/api/getFavByUser/:userId', panier.getFavorisByUser); //ok
+router.post('/api/addPanier/:userId', panier.addToPanier); //ok 
+router.get('/api/getPanierByUser/:userId', panier.getPanierByUser); //ok
+router.delete('/api/removeLine/:userId/:lineId', panier.removeLinePanier) //ok
+router.put('/api/updatePanier/:userId', panier.updatePanier); //ok
 
 export default router;

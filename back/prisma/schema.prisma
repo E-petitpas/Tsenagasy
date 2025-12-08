@@ -125,7 +125,7 @@ model Sponsor {
 // ==========================
 model Panier {
   id       String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  idClient String        @db.Uuid
+  idClient String        @unique @db.Uuid
   client   Utilisateur   @relation(fields: [idClient], references: [id])
   lignes   LignePanier[]
   ventes   Vente[]
@@ -147,6 +147,7 @@ model LignePanier {
   produit       Produit @relation(fields: [idProduit], references: [id], onDelete: Cascade)
   panier        Panier  @relation(fields: [idPanier], references: [id], onDelete: Cascade)
 
+  @@unique([idPanier, idProduit])
   @@map("ligne_panier")
 }
 

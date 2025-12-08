@@ -5,26 +5,19 @@ import { Header } from '../components/Header';
 import { AuthModal } from '../components/AuthModal';
 import { PromoBanner } from '../components/PromoBanner';
 import { ProductGrid } from '../components/productGrid';
-import { CartCheckout } from '../components/CartCheckout';
 import { VendorAuthModal } from '../components/vendorAuthModal';
-
-import { RechargeWalletModal } from '../components/RechargeWalletModal';
-import { TransferFundsModal } from '../components/TransferFundsModal';
 
 import { toast } from 'sonner';
 import { UserData } from '../config/authStorage';
 
-type Page = 'home' | 'cart' | 'search';
+type Page = 'home' | 'search';
 
 interface HomePublicProps {
   currentUser: UserData | null;
-  cartItemCount: number;
   onLogin: (user: UserData) => void;
-  onAddToCart: (productId: string) => Promise<void>;
-  setCartItemCount: React.Dispatch<React.SetStateAction<number>>;
 }
 
-export default function HomePublic({ currentUser, cartItemCount, onLogin, onAddToCart, setCartItemCount, }: HomePublicProps) {
+export default function HomePublic({ currentUser, onLogin, }: HomePublicProps) {
 
   const navigate = useNavigate();
 
@@ -33,32 +26,19 @@ export default function HomePublic({ currentUser, cartItemCount, onLogin, onAddT
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-
-  const openCart = () => setCurrentPage('cart');
-  const backToHome = () => setCurrentPage('home');
-
   // -------------------------
   // Login
   // -------------------------
 
   const handleLoginSuccess = (user: UserData) => {
     onLogin(user);
-    toast.success(`Bienvenue ${user.name} !`);
-    navigate('/dashboard');  // 🔥 redirection une fois connecté
+    navigate('/dashboard');  // redirection une fois connecté
   };
 
   const handlePublicAddToCart = async (productId: string) => {
     toast.error("Connectez-vous pour ajouter au panier");
     setIsAuthModalOpen(true);
   };
-
-  // -------------------------
-  // Pages spéciales
-  // -------------------------
-
-  if (currentPage === 'cart') {
-    return <CartCheckout onBack={backToHome} />;
-  }
 
   // -------------------------
   // RENDER HOME PUBLIC
@@ -68,7 +48,7 @@ export default function HomePublic({ currentUser, cartItemCount, onLogin, onAddT
     <>
       {/* ---------------- HEADER ---------------- */}
       <Header
-        cartItemCount={cartItemCount}
+        cartItemCount={0}
         currentUser={null} // 🔥 Public = jamais connecté
         onLoginClick={() => setIsAuthModalOpen(true)}
         onCartClick={() => {

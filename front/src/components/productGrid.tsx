@@ -172,7 +172,7 @@ export function ProductGrid({ onAddToCart, userId }: ProductGridProps) {
                 key={product.id}
                 product={product}
                 onProductClick={openModal} 
-                onAddToCart={(id) => onAddToCart?.(id, 1)}
+                onAddToCart={(id, qty) => onAddToCart?.(id, qty ?? 1)}
 
                 // AJOUT favoris
                 isFavorite={!!favorites[product.id]}

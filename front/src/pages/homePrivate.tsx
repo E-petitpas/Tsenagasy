@@ -4,41 +4,24 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { PromoBanner } from '../components/PromoBanner';
 import { ProductGrid } from '../components/productGrid';
-import { CartCheckout } from '../components/CartCheckout';
-
+import { CartModal } from '../components/CartModal';
+import { useCart } from "../context/cartContext";
 import { UserData } from '../config/authStorage';
 
-type Page = 'home' | 'cart' | 'search';
+type Page = 'home' | 'search';
 
 interface HomePrivateProps {
   currentUser: UserData;
-  cartItemCount: number;
-  onAddToCart: (productId: string) => Promise<void>;
-    setCartItemCount: React.Dispatch<React.SetStateAction<number>>;
-    onLogout: () => void;
+  onLogout: () => void;
 }
 
-export default function HomePrivate({currentUser, cartItemCount, onAddToCart, setCartItemCount, onLogout }: HomePrivateProps) {
+export default function HomePrivate({currentUser, onLogout }: HomePrivateProps) {
 
   const navigate = useNavigate();
-
+  const { itemCount, addToCart } = useCart();
   const [currentPage, setCurrentPage] = useState<Page>('home');
-
-  // ---------------------------
-  // Navigation interne simplifiée
-  // ---------------------------
-
-  const openCart = () => setCurrentPage('cart');
-  const backToHome = () => setCurrentPage('home');
-
-  // ---------------------------
-  // Pages spécifiques
-  // ---------------------------
-
-  if (currentPage === 'cart') {
-    return <CartCheckout onBack={backToHome} />;
-  }
-
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  
   // ---------------------------
   // HOME PRIVATE
   // ---------------------------
@@ -47,24 +30,30 @@ export default function HomePrivate({currentUser, cartItemCount, onAddToCart, se
     <>
       {/* HEADER simplifié */}
       <Header
-        cartItemCount={cartItemCount}
-        currentUser={currentUser}  // 🔥 connecté = header complet
+        cartItemCount={itemCount}
+        currentUser={currentUser}  
         onLoginClick={() => {}}
-        onCartClick={openCart}
+        onCartClick={() => setIsCartOpen(true)}
         onSearchClick={() => setCurrentPage('search')}
         onNavigationClick={() => {}}
         onProfileClick={() => navigate('/dashboard')}
         onLogoutClick={onLogout}
       />
 
+      {/* MODAL PANIER FLOTTANT */}
+      <CartModal
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+      />
+
       <main>
 
         {/* ---------------- PROMO adaptée (sans CTA login) ---------------- */}
-        <PromoBanner isPublicHome={false} onAddToCart={onAddToCart}/>
+        <PromoBanner isPublicHome={false} onAddToCart={(id) => addToCart(id, 1)}/>
 
         {/* ---------------- PRODUITS ---------------- */}
         <ProductGrid
-          onAddToCart={onAddToCart} userId={currentUser.id}
+          onAddToCart={(id, qty) => addToCart(id, qty ?? 1)} userId={currentUser.id}
         />
 
         {/* ---------------- QUICK SERVICES (adapté connecté) ---------------- */}

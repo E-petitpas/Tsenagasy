@@ -1,167 +1,204 @@
 import React, { useState } from 'react';
-import { Minus, Plus, Trash2, CreditCard, Smartphone, ChevronLeft, MapPin, Truck } from 'lucide-react';
+import { Minus, Plus, Trash2, ChevronLeft, Truck } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Separator } from './ui/separator';
-import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-
-interface CartItem {
-  id: string;
-  name: string;
-  price: number;
-  quantity: number;
-  image: string;
-  vendor: string;
-}
+import { toast } from "sonner";
+import { useCart } from "../context/cartContext";
+import Swal from "sweetalert2";
 
 interface CartCheckoutProps {
   onBack: () => void;
+  inModal?: boolean;
 }
 
-const mockCartItems: CartItem[] = [
-  {
-    id: '1',
-    name: 'Tissu Lamba traditionnel - Soie sauvage',
-    price: 45000,
-    quantity: 1,
-    image: 'https://images.unsplash.com/photo-1660695828374-4ff51ac9df5d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhZnJpY2FuJTIwdGV4dGlsZXMlMjBjb2xvcmZ1bCUyMGZhYnJpY3xlbnwxfHx8fDE3NTY2NzgxODJ8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    vendor: 'Artisan Malagasy'
-  },
-  {
-    id: '2',
-    name: 'Panier artisanal en raphia',
-    price: 25000,
-    quantity: 2,
-    image: 'https://images.unsplash.com/photo-1606077089838-0ac4a27fc96f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtYWRhZ2FzY2FyJTIwaGFuZGNyYWZ0JTIwYXJ0aXNhbiUyMHByb2R1Y3RzfGVufDF8fHx8MTc1NjY3ODE3OXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    vendor: 'Tana Craft'
-  }
-];
+export function CartCheckout({ onBack, inModal = false }: CartCheckoutProps) {
+  const { cart, loading, error, updateQty, removeFromCart } = useCart();
+  const lignes = cart?.lignes ?? [];
 
-export function CartCheckout({ onBack }: CartCheckoutProps) {
-  const [cartItems, setCartItems] = useState<CartItem[]>(mockCartItems);
-  const [paymentMethod, setPaymentMethod] = useState('mvola');
-  const [step, setStep] = useState<'cart' | 'shipping' | 'payment'>('cart');
+  // seulement 2 étapes
+  const [step, setStep] = useState<'cart' | 'shipping'>('cart');
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('mg-MG').format(price) + ' Ar';
-  };
+  const formatPrice = (price: number) =>
+    new Intl.NumberFormat('mg-MG').format(price) + ' Ar';
 
-  const updateQuantity = (id: string, newQuantity: number) => {
-    if (newQuantity === 0) {
-      setCartItems(prev => prev.filter(item => item.id !== id));
-    } else {
-      setCartItems(prev => 
-        prev.map(item => 
-          item.id === id ? { ...item, quantity: newQuantity } : item
-        )
-      );
-    }
-  };
+  const subtotal = lignes.reduce(
+    (sum, line) => sum + Number(line.total),
+    0
+  );
 
-  const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const deliveryFee = subtotal > 50000 ? 0 : 3000; // Free delivery over 50,000 Ar
+  // tu peux changer ce calcul plus tard si tu veux un vrai système
+  const deliveryFee = subtotal > 100000 ? 0 : 5000;
   const total = subtotal + deliveryFee;
 
-  const paymentOptions = [
-    { 
-      id: 'mvola', 
-      name: 'MVola', 
-      icon: '📱',
-      color: 'text-red-600',
-      description: 'Paiement mobile sécurisé'
-    },
-    { 
-      id: 'orangemoney', 
-      name: 'Orange Money', 
-      icon: '🧡',
-      color: 'text-orange-600',
-      description: 'Paiement via Orange Money'
-    },
-    { 
-      id: 'airtelmoney', 
-      name: 'Airtel Money', 
-      icon: '🔴',
-      color: 'text-red-700',
-      description: 'Paiement via Airtel Money'
-    },
-    { 
-      id: 'card', 
-      name: 'Carte bancaire', 
-      icon: '💳',
-      color: 'text-blue-600',
-      description: 'Visa, Mastercard'
-    }
-  ];
+  const handleRemove = async (lineId: string, productName?: string) => {
+    const result = await Swal.fire({
+      title: "Supprimer cet article ?",
+      text: productName
+        ? `${productName} sera retiré du panier`
+        : "Cet article sera retiré du panier",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#2D8A47",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Oui, supprimer",
+      cancelButtonText: "Annuler",
+    });
 
+    if (!result.isConfirmed) return;
+
+    Swal.fire({
+      title: "Suppression...",
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      showConfirmButton: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    try {
+      await removeFromCart(lineId);
+
+      Swal.fire({
+        icon: "success",
+        title: "Supprimé !",
+        timer: 900,
+        showConfirmButton: false,
+      });
+    } catch (e: any) {
+      Swal.fire({
+        icon: "error",
+        title: "Erreur",
+        text:
+          e?.response?.data?.error ||
+          e?.message ||
+          "Impossible de supprimer",
+      });
+    }
+  };
+
+  // ---------------------------------------
+  // ÉTAPE 1 : PANIER
+  // ---------------------------------------
   if (step === 'cart') {
     return (
-      <div className="min-h-screen bg-gray-50">
-        {/* Header */}
-        <div className="bg-white border-b">
-          <div className="container mx-auto px-4 py-4">
-            <Button variant="ghost" onClick={onBack} className="mb-2">
-              <ChevronLeft className="h-4 w-4 mr-2" />
-              Continuer les achats
-            </Button>
-            <h1 className="text-2xl font-bold">Mon panier ({cartItems.length} articles)</h1>
+      <div className={inModal ? 'bg-gray-50' : 'min-h-screen bg-gray-50'}>
+        {/* Header seulement si pas en modal */}
+        {!inModal && (
+          <div className="bg-white border-b">
+            <div className="container mx-auto px-4 py-4">
+              <Button variant="ghost" onClick={onBack} className="mb-2">
+                <ChevronLeft className="h-4 w-4 mr-2" />
+                Continuer les achats
+              </Button>
+              <h1 className="text-2xl font-bold">
+                Mon panier ({lignes.length} articles)
+              </h1>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="container mx-auto px-4 py-8">
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Cart Items */}
             <div className="lg:col-span-2">
-              <Card>
+              <Card style={{
+                backgroundColor: "rgba(54, 162, 82, 0.1)", // vert clair
+                border: "1px solid rgba(45, 138, 71, 0.20)" // bordure verte légère
+              }}>
                 <CardContent className="p-6">
-                  {cartItems.length === 0 ? (
+                  {lignes.length === 0 ? (
                     <div className="text-center py-12">
-                      <p className="text-gray-500 mb-4">Votre panier est vide</p>
+                      <p className="text-gray-500 mb-4">
+                        Votre panier est vide
+                      </p>
                       <Button onClick={onBack}>Continuer les achats</Button>
                     </div>
                   ) : (
                     <div className="space-y-6">
-                      {cartItems.map((item) => (
-                        <div key={item.id} className="flex gap-4 p-4 border rounded-lg">
-                          <ImageWithFallback
-                            src={item.image}
-                            alt={item.name}
-                            className="w-20 h-20 object-cover rounded"
-                          />
-                          <div className="flex-1">
-                            <h3 className="font-medium text-gray-900">{item.name}</h3>
-                            <p className="text-sm text-gray-600 mb-2">Par {item.vendor}</p>
-                            <p className="font-bold text-[#2D8A47]">{formatPrice(item.price)}</p>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="w-12 text-center">{item.quantity}</span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => updateQuantity(item.id, 0)}
-                            className="text-red-500 hover:text-red-700"
+                      {lignes.map((line) => {
+                        const p = line.produit;
+                        const image = p?.images?.[0] ?? "";
+                        const magasinNom = p?.magasin?.nom_Magasin ?? "Magasin";
+                        const prixUnitaire = Number(line.prix_Unitaire);
+                        const totalLigne = Number(line.total);
+
+                        return (
+                          <div
+                            key={line.id}
+                            className="flex gap-4 p-4 border rounded-lg bg-white"
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
+                            {/* Image produit */}
+                            <ImageWithFallback
+                              src={image}
+                              alt={p.nom}
+                              className="w-20 h-20 object-cover rounded"
+                            />
+
+                            {/* Infos produit */}
+                            <div className="flex-1">
+                              {/* nom produit */}
+                              <h3 className="font-medium text-gray-900">
+                                {p.nom}
+                              </h3>
+
+                              {/* nom du magasin (pas vendeur) */}
+                              <p className="text-sm text-gray-600">
+                                Magasin : {magasinNom}
+                              </p>
+
+                              {/* prix unitaire */}
+                              <p className="font-bold text-[#2D8A47] mt-1">
+                                {formatPrice(prixUnitaire)} / unité
+                              </p>
+
+                              {/* total ligne */}
+                              <p className="text-sm text-gray-700">
+                                Total : {formatPrice(totalLigne)}
+                              </p>
+                            </div>
+
+                            {/* Quantité */}
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={line.quantite <= 1} // min = 1
+                                onClick={() => {
+                                  updateQty(line.idProduit, line.quantite - 1);
+                                }}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+
+                              <span className="w-10 text-center font-semibold">
+                                {line.quantite}
+                              </span>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                 onClick={() => updateQty(line.idProduit, line.quantite + 1)}
+                                  disabled={line.quantite >= p.stock}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+
+                            {/* Supprimer */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemove(line.id, p?.nom)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
@@ -175,30 +212,43 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
                   <CardTitle>Résumé de la commande</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between text-sm">
                     <span>Sous-total</span>
                     <span>{formatPrice(subtotal)}</span>
                   </div>
-                  <div className="flex justify-between">
+
+                  <div className="flex justify-between text-sm">
                     <span>Livraison</span>
-                    <span className={deliveryFee === 0 ? 'text-green-600' : ''}>
-                      {deliveryFee === 0 ? 'Gratuit' : formatPrice(deliveryFee)}
+                    <span
+                      className={
+                        deliveryFee === 0 ? 'text-green-600 font-medium' : ''
+                      }
+                    >
+                      {deliveryFee === 0
+                        ? 'Gratuit'
+                        : formatPrice(deliveryFee)}
                     </span>
                   </div>
+
                   {deliveryFee === 0 && subtotal > 50000 && (
-                    <p className="text-sm text-green-600">
+                    <p className="text-xs text-green-600">
                       🎉 Livraison gratuite appliquée !
                     </p>
                   )}
+
                   <Separator />
+
                   <div className="flex justify-between text-lg font-bold">
                     <span>Total</span>
-                    <span className="text-[#2D8A47]">{formatPrice(total)}</span>
+                    <span className="text-[#2D8A47]">
+                      {formatPrice(total)}
+                    </span>
                   </div>
-                  <Button 
+
+                  <Button
                     className="w-full bg-[#2D8A47] hover:bg-[#245A35]"
                     onClick={() => setStep('shipping')}
-                    disabled={cartItems.length === 0}
+                    disabled={lignes.length === 0}
                   >
                     Passer la commande
                   </Button>
@@ -211,9 +261,13 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
     );
   }
 
-  if (step === 'shipping') {
-    return (
-      <div className="min-h-screen bg-gray-50">
+  // ---------------------------------------
+  // ÉTAPE 2 : ADRESSE LIVRAISON + PAYER
+  // ---------------------------------------
+  return (
+    <div className={inModal ? 'bg-gray-50' : 'min-h-screen bg-gray-50'}>
+      {/* Header seulement si pas en modal */}
+      {!inModal && (
         <div className="bg-white border-b">
           <div className="container mx-auto px-4 py-4">
             <Button variant="ghost" onClick={() => setStep('cart')} className="mb-2">
@@ -223,177 +277,98 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
             <h1 className="text-2xl font-bold">Adresse de livraison</h1>
           </div>
         </div>
-
-        <div className="container mx-auto px-4 py-8">
-          <div className="grid lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2">
-              <Card>
-                <CardContent className="p-6">
-                  <form className="space-y-4">
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="firstName">Prénom</Label>
-                        <Input id="firstName" placeholder="Votre prénom" />
-                      </div>
-                      <div>
-                        <Label htmlFor="lastName">Nom</Label>
-                        <Input id="lastName" placeholder="Votre nom" />
-                      </div>
-                    </div>
-                    <div>
-                      <Label htmlFor="phone">Téléphone</Label>
-                      <Input id="phone" placeholder="+261 xx xxx xx xx" />
-                    </div>
-                    <div>
-                      <Label htmlFor="address">Adresse complète</Label>
-                      <Input id="address" placeholder="Lot, rue, quartier..." />
-                    </div>
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="city">Ville</Label>
-                        <Input id="city" placeholder="Antananarivo" />
-                      </div>
-                      <div>
-                        <Label htmlFor="district">District/Commune</Label>
-                        <Input id="district" placeholder="Votre district" />
-                      </div>
-                    </div>
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <Truck className="h-5 w-5 text-blue-600" />
-                        <span className="font-medium">Options de livraison</span>
-                      </div>
-                      <RadioGroup defaultValue="standard">
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="standard" id="standard" />
-                          <Label htmlFor="standard">Standard (2-3 jours) - Gratuit</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="express" id="express" />
-                          <Label htmlFor="express">Express (24h) - 5 000 Ar</Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                  </form>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Résumé</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Sous-total</span>
-                      <span>{formatPrice(subtotal)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Livraison</span>
-                      <span>{deliveryFee === 0 ? 'Gratuit' : formatPrice(deliveryFee)}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between font-bold">
-                      <span>Total</span>
-                      <span className="text-[#2D8A47]">{formatPrice(total)}</span>
-                    </div>
-                  </div>
-                  <Button 
-                    className="w-full mt-4 bg-[#2D8A47] hover:bg-[#245A35]"
-                    onClick={() => setStep('payment')}
-                  >
-                    Continuer vers le paiement
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b">
-        <div className="container mx-auto px-4 py-4">
-          <Button variant="ghost" onClick={() => setStep('shipping')} className="mb-2">
-            <ChevronLeft className="h-4 w-4 mr-2" />
-            Retour à la livraison
-          </Button>
-          <h1 className="text-2xl font-bold">Paiement sécurisé</h1>
-        </div>
-      </div>
+      )}
 
       <div className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-3 gap-8">
+          {/* Formulaire adresse */}
           <div className="lg:col-span-2">
+            <button
+              onClick={() => setStep("cart")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                marginBottom: 10,
+                padding: 0,
+                border: "none",
+                background: "transparent",
+                color: "#2D8A47",
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: "pointer",
+                lineHeight: 1.2,
+              }}
+            >
+              <ChevronLeft style={{ width: 16, height: 16 }} />
+              Retour au panier
+            </button>
+            
             <Card>
-              <CardHeader>
-                <CardTitle>Choisir un mode de paiement</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="space-y-4">
-                  {paymentOptions.map((option) => (
-                    <div key={option.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center space-x-3">
-                        <RadioGroupItem value={option.id} id={option.id} />
-                        <div className="flex items-center space-x-3 flex-1">
-                          <span className="text-2xl">{option.icon}</span>
-                          <div>
-                            <Label htmlFor={option.id} className={`font-medium ${option.color}`}>
-                              {option.name}
-                            </Label>
-                            <p className="text-sm text-gray-600">{option.description}</p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {paymentMethod === option.id && option.id !== 'card' && (
-                        <div className="mt-4 space-y-3">
-                          <div>
-                            <Label>Numéro de téléphone</Label>
-                            <Input placeholder="+261 xx xxx xx xx" />
-                          </div>
-                          <p className="text-sm text-gray-600">
-                            Vous recevrez un message de confirmation pour valider le paiement.
-                          </p>
-                        </div>
-                      )}
-                      
-                      {paymentMethod === option.id && option.id === 'card' && (
-                        <div className="mt-4 space-y-3">
-                          <div>
-                            <Label>Numéro de carte</Label>
-                            <Input placeholder="1234 5678 9012 3456" />
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <Label>Date d'expiration</Label>
-                              <Input placeholder="MM/YY" />
-                            </div>
-                            <div>
-                              <Label>CVV</Label>
-                              <Input placeholder="123" />
-                            </div>
-                          </div>
-                        </div>
-                      )}
+              <CardContent className="p-6">
+                <form className="space-y-4">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="firstName" className="block mb-2">Prénom</Label>
+                      <Input id="firstName" placeholder="Votre prénom" />
                     </div>
-                  ))}
-                </RadioGroup>
+                    <div>
+                      <Label htmlFor="lastName" className="block mb-2">Nom</Label>
+                      <Input id="lastName" placeholder="Votre nom" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="phone" className="block mb-2">Téléphone</Label>
+                    <Input id="phone" placeholder="+261 xx xxx xx xx" />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="address" className="block mb-2">Adresse complète</Label>
+                    <Input id="address" placeholder="Lot, rue, quartier..." />
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="city" className="block mb-2">Ville</Label>
+                      <Input id="city" placeholder="Antananarivo" />
+                    </div>
+                    <div>
+                      <Label htmlFor="district" className="block mb-2">District/Commune</Label>
+                      <Input id="district" placeholder="Votre district" />
+                    </div>
+                  </div>
+
+                  {/* Pas d’options de livraison, juste un message simple */}
+                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <div className="flex items-center space-x-2 mb-1">
+                      <Truck className="h-5 w-5 text-blue-600" />
+                      <span className="font-medium text-blue-900">
+                        Information livraison
+                      </span>
+                    </div>
+
+                    <p className="text-sm text-blue-800">
+                      Votre colis arrivera entre 1 et 2 semaines selon votre localisation
+                      (Antananarivo ou province).
+                    </p>
+
+                    <p className="text-xs text-blue-700/80 mt-1">
+                      Nos vendeurs expédient généralement sous 24–48h.
+                    </p>
+                  </div>
+                </form>
               </CardContent>
             </Card>
           </div>
 
+          {/* Résumé + bouton payer */}
           <div>
             <Card>
               <CardHeader>
-                <CardTitle>Finaliser la commande</CardTitle>
+                <CardTitle>Résumé</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span>Sous-total</span>
@@ -401,32 +376,39 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
                   </div>
                   <div className="flex justify-between">
                     <span>Livraison</span>
-                    <span>{deliveryFee === 0 ? 'Gratuit' : formatPrice(deliveryFee)}</span>
+                    <span>
+                      {deliveryFee === 0
+                        ? 'Gratuit'
+                        : formatPrice(deliveryFee)}
+                    </span>
                   </div>
                   <Separator />
                   <div className="flex justify-between font-bold text-lg">
-                    <span>Total à payer</span>
-                    <span className="text-[#2D8A47]">{formatPrice(total)}</span>
+                    <span>Total</span>
+                    <span className="text-[#2D8A47]">
+                      {formatPrice(total)}
+                    </span>
                   </div>
                 </div>
 
-                <div className="bg-green-50 p-3 rounded-lg text-sm">
-                  <div className="flex items-center space-x-2 text-green-700">
-                    <CreditCard className="h-4 w-4" />
-                    <span className="font-medium">Paiement 100% sécurisé</span>
-                  </div>
-                  <p className="text-green-600 text-xs mt-1">
-                    Vos données sont protégées par un cryptage SSL
-                  </p>
-                </div>
-
-                <Button className="w-full bg-[#2D8A47] hover:bg-[#245A35] text-lg py-3">
-                  <CreditCard className="h-5 w-5 mr-2" />
-                  Payer maintenant
+                {/* ✅ bouton PayPal placeholder */}
+                <Button
+                  className="w-full mt-3 bg-[#2D8A47] hover:bg-[#245A35]"
+                  onClick={() => {
+                    // TODO: ici tu brancheras PayPal plus tard
+                    console.log("Paiement PayPal...");
+                    toast.success("Téléchargement de la facture...");
+                    // Exemple futur :
+                    // await createOrder()
+                    // await paypalCheckout()
+                    // setCartItems([])
+                  }}
+                >
+                  Payer avec PayPal
                 </Button>
 
                 <p className="text-xs text-gray-500 text-center">
-                  En continuant, vous acceptez nos conditions d'utilisation et de vente
+                  PayPal sera activé dès que ton compte est prêt.
                 </p>
               </CardContent>
             </Card>

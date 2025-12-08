@@ -34,7 +34,7 @@ export function Header({ cartItemCount = 0, onLoginClick, onCartClick, onProfile
       <div className="bg-gradient-to-r from-[#2D8A47] to-[#4CAF50] text-white text-center py-2 px-4">
         <p className="text-sm">
           <MapPin className="inline h-4 w-4 mr-1" />
-          Livraison gratuite à Antananarivo pour les commandes de plus de 50 000 Ar
+          Livraison gratuite à Antananarivo pour les commandes de plus de 100 000 Ar
         </p>
       </div>
 

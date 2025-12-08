@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { StatusBadge } from "./StatusBadge";
+import Swal from "sweetalert2";
 
 export type ProductDetailData = {
   id: string;
@@ -51,6 +52,7 @@ export const ProductDetailModal: React.FC<Props> = ({
 }) => {
   const [qty, setQty] = useState(1);
   const [activeImg, setActiveImg] = useState(0);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -373,15 +375,17 @@ export const ProductDetailModal: React.FC<Props> = ({
 
                     <div className="flex items-center gap-3 mb-3">
                       <button
+                        disabled={qty <= 1}
                         className="w-9 h-9 rounded-md border border-gray-300 text-lg hover:bg-gray-50 transition font-medium"
                         onClick={() => setQty((q) => Math.max(1, q - 1))}
                       >
                         −
                       </button>
                       <div className="w-10 text-center font-semibold text-lg">{qty}</div>
-                      <button
+                        <button
+                          disabled={qty >= product.stock}
                         className="w-9 h-9 rounded-md border border-gray-300 text-lg hover:bg-gray-50 transition font-medium"
-                        onClick={() => setQty((q) => q + 1)}
+                        onClick={() => setQty((q) => Math.min(q + 1, product.stock))}
                       >
                         +
                       </button>
@@ -389,7 +393,51 @@ export const ProductDetailModal: React.FC<Props> = ({
 
                     <button
                       disabled={isOut}
-                      onClick={() => onAddToCart(product.id, qty)}
+                      onClick={async () => {
+                        if (!product || adding) return;
+
+                        const safeQty = Math.max(1, Math.min(qty, product.stock));
+                        if (safeQty !== qty) setQty(safeQty);
+
+                        setAdding(true);
+
+                        // ✅ SweetAlert qui fige l’UI pendant l’ajout
+                        Swal.fire({
+                          title: "Ajout au panier...",
+                          text: "Merci de patienter",
+                          allowOutsideClick: false,
+                          allowEscapeKey: false,
+                          showConfirmButton: false,
+                          didOpen: () => {
+                            Swal.showLoading();
+                          },
+                        });
+
+                        try {
+                          await onAddToCart(product.id, safeQty);
+
+                          // ✅ feedback succès
+                          await Swal.fire({
+                            icon: "success",
+                            title: "Ajouté !",
+                            timer: 900,
+                            showConfirmButton: false,
+                          });
+
+                          onClose(); // ✅ tu fermes seulement après succès
+                        } catch (err: any) {
+                          Swal.fire({
+                            icon: "error",
+                            title: "Erreur",
+                            text:
+                              err?.response?.data?.error ||
+                              err?.message ||
+                              "Impossible d'ajouter au panier",
+                          });
+                        } finally {
+                          setAdding(false);
+                        }
+                      }}
                       className="
                         w-full bg-[#2D8A47] text-white py-2 rounded-md font-semibold
                         disabled:bg-gray-300 disabled:cursor-not-allowed

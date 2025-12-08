@@ -4,16 +4,15 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { toast, Toaster } from 'sonner';
 import { AuthStorage, UserData } from './config/authStorage';
-import Home from './pages/home';
 import HomePublic from './pages/homePublic';
 import HomePrivate from './pages/homePrivate';
 import AdminDashboard from './pages/adminDashboard';
 import UserDashboard from './pages/UserDashboard';
+import { CartProvider } from './context/cartContext';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  const [cartItemCount, setCartItemCount] = useState(0);
   const [globalWalletBalance, setGlobalWalletBalance] = useState(45000);
 
   useEffect(() => { 
@@ -48,21 +47,6 @@ export default function App() {
     toast.info('Vous êtes déconnecté');
   };
 
-  const handleAddToCart = async (productId: string) => {
-    setCartItemCount(prev => prev + 1);
-    toast.success('Produit ajouté au panier !', {
-      description: 'Vous pouvez continuer vos achats ou voir votre panier.'
-    });
-
-    if (currentUser?.accessToken) {
-      try {
-        console.log('Adding product to cart:', productId);
-      } catch (error) {
-        console.error('Failed to add to cart:', error);
-      }
-    }
-  };
-
   const handleGlobalWalletRecharge = (amount: number, method: string) => {
     setGlobalWalletBalance(prev => prev + amount);
   };
@@ -75,14 +59,11 @@ export default function App() {
 
   const sharedProps = {
     currentUser,
-    cartItemCount,
     globalWalletBalance,
     onLogin: handleLogin,
     onLogout: handleLogout,
-    onAddToCart: handleAddToCart,
     onGlobalWalletRecharge: handleGlobalWalletRecharge,
     onTransferSuccess: handleTransferSuccess,
-    setCartItemCount
   };
 
   if (isLoadingAuth) {
@@ -101,33 +82,28 @@ export default function App() {
       <div className="min-h-screen bg-gray-50">
         <Toaster position="top-right" richColors />
         
-        <Routes>
-          {/* <Route 
-            path="/" 
-            element={currentUser?.role === 'admin' ? (
-                  <Navigate to="/admin" replace />
-                ) : (
-                  <Home {...sharedProps} />
-                )} 
-          /> */}
-
+        <Routes>      
           {/* --------- PAGE HOME --------- */}
           <Route 
             path="/" 
             element={
-              currentUser
-                ? (
-                    currentUser.role === "admin"
-                      ? <Navigate to="/admin" replace />
-                      : <HomePrivate 
-                          currentUser={currentUser}
-                          cartItemCount={cartItemCount}
-                          onAddToCart={handleAddToCart}
-                          setCartItemCount={setCartItemCount}
-                          onLogout={handleLogout}
-                        />
-                  )
-                : <HomePublic {...sharedProps} />
+              currentUser ? (
+                currentUser.role === "admin" ? (
+                  <Navigate to="/admin" replace />
+                ) : currentUser.id ? ( // ✅ check ici
+                  <CartProvider userId={currentUser.id}>
+                    <HomePrivate
+                      currentUser={currentUser}
+                      onLogout={handleLogout}
+                    />
+                  </CartProvider>
+                ) : (
+                  // fallback si jamais id absent
+                  <Navigate to="/" replace />
+                )
+              ) : (
+                <HomePublic {...sharedProps} />
+              )
             } 
           />
           
@@ -135,9 +111,17 @@ export default function App() {
           <Route
             path="/dashboard/*"
             element={
-              currentUser
-                ? <UserDashboard currentUser={currentUser} onLogout={handleLogout} />
-                : <Navigate to="/" replace />
+              currentUser ? (
+                currentUser.id ? ( // ✅ check ici aussi
+                  <CartProvider userId={currentUser.id}>
+                    <UserDashboard currentUser={currentUser} onLogout={handleLogout} />
+                  </CartProvider>
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              ) : (
+                <Navigate to="/" replace />
+              )
             }
           />
           
