@@ -119,7 +119,7 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
     activeView === "vendor-products" ? "products" :
     activeView === "vendor-sponsors" ? "sponsor" :
     activeView === "vendor-orders" ? "orders" :
-    activeView === "vendor-analytics" ? "analytics" :
+    // activeView === "vendor-analytics" ? "analytics" :
     "overview";
 
   useEffect(() => {
@@ -1180,7 +1180,7 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
         {currentView === "products" && renderProducts()}
         {currentView === "sponsor" && renderSponsor()}
         {currentView === "orders" && renderOrders()}
-        {currentView === "analytics" && renderAnalytics()}
+        {/* {currentView === "analytics" && renderAnalytics()} */}
       </div>
 
       {/* New Product Modal */}

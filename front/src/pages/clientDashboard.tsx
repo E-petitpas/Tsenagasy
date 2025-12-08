@@ -17,6 +17,7 @@ import { ProductDetailModal } from "../components/productDetailModal";
 import axios from "axios";
 import { API_BASE_URL } from "../config/api";
 import Swal from "sweetalert2";
+import { useCart } from "../context/cartContext";
 
 interface ClientDashboardPageProps {
   profileUser: ProfileUser | null;
@@ -80,9 +81,8 @@ const demoRecommendations = [
 
 
 export default function ClientDashboardPage({ profileUser, activeTab, onChangeTab }: ClientDashboardPageProps) {
-  const navigate = useNavigate();
-  const [walletBalance, setWalletBalance] = useState(25000);
-  const [isRechargeModalOpen, setIsRechargeModalOpen] = useState(false);
+  // const [walletBalance, setWalletBalance] = useState(25000);
+  // const [isRechargeModalOpen, setIsRechargeModalOpen] = useState(false);
   const [wishlist, setWishlist] = useState<any[]>([]);
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const isVendor = profileUser?.role === "vendor";
@@ -90,6 +90,9 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
   const [favSelectedProduct, setFavSelectedProduct] = useState<any | null>(null);
   const [favCount, setFavCount] = useState(0);
   const [favCountLoading, setFavCountLoading] = useState(false);
+  const { addToCart } = useCart();
+  const [addingFavIds, setAddingFavIds] = useState<Set<string>>(new Set());
+  const [addedFavIds, setAddedFavIds] = useState<Set<string>>(new Set());
 
   const [name, setName] = useState(profileUser?.name ?? "");
   const [email, setEmail] = useState(profileUser?.email ?? "");
@@ -149,22 +152,22 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
     loadWishlist();
   }, [profileUser?.id]);
   
-  const [transactions, setTransactions] = useState([
-    {
-      id: "1",
-      type: "recharge",
-      description: "Recharge MVola",
-      amount: 50000,
-      date: "2024-01-15T14:30:00",
-    },
-    {
-      id: "2",
-      type: "purchase",
-      description: "Achat produit",
-      amount: -25000,
-      date: "2024-01-14T16:45:00",
-    },
-  ]);
+  // const [transactions, setTransactions] = useState([
+  //   {
+  //     id: "1",
+  //     type: "recharge",
+  //     description: "Recharge MVola",
+  //     amount: 50000,
+  //     date: "2024-01-15T14:30:00",
+  //   },
+  //   {
+  //     id: "2",
+  //     type: "purchase",
+  //     description: "Achat produit",
+  //     amount: -25000,
+  //     date: "2024-01-14T16:45:00",
+  //   },
+  // ]);
 
   type WishlistItemCard = {
     id: string;
@@ -252,7 +255,52 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
         return "";
     }
   };
-  
+
+  const handleAddFavToCart = async (
+  produitId: string,
+  qty = 1,                 // ✅ par défaut = 1
+  isLocation?: boolean
+) => {
+  // évite double clic / double appel
+  if (addingFavIds.has(produitId)) return;
+
+  setAddingFavIds(prev => new Set(prev).add(produitId));
+
+  try {
+    // ✅ si modal -> qty est passé
+    // ✅ si bouton simple -> qty reste 1
+    await addToCart(produitId, qty);
+
+    setAddingFavIds(prev => {
+      const s = new Set(prev);
+      s.delete(produitId);
+      return s;
+    });
+
+    setAddedFavIds(prev => new Set(prev).add(produitId));
+
+    // ❌ PAS de toast ici (sinon tu en as 2)
+    // toast.success("Ajouté au panier");
+
+    setTimeout(() => {
+      setAddedFavIds(prev => {
+        const s = new Set(prev);
+        s.delete(produitId);
+        return s;
+      });
+    }, 2000);
+
+  } catch (e: any) {
+    setAddingFavIds(prev => {
+      const s = new Set(prev);
+      s.delete(produitId);
+      return s;
+    });
+
+    console.error(e);
+  }
+};
+
  const renderDashboard = () => (
     <>
       {/* --- CARDS PRINCIPALES --- */}
@@ -522,12 +570,20 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
                     borderRadius: "8px",
                   }}
                   onClick={(e) => {
-                    e.stopPropagation(); // ✅ empêche le modal de s'ouvrir
-                    console.log("Ajouter au panier", item.id);
+                    e.stopPropagation(); 
+                    handleAddFavToCart(item.id, 1, item.isLocation);
                   }}
                 >
-                  <ShoppingBag className="h-4 w-4 mr-1" />
-                  Ajouter
+                 {addingFavIds.has(item.id) ? (
+                    <span className="animate-pulse">Ajout...</span>
+                  ) : addedFavIds.has(item.id) ? (
+                    <>✅ Ajouté</>
+                  ) : (
+                    <>
+                      <ShoppingBag className="h-4 w-4 mr-1" />
+                      Ajouter
+                    </>
+                  )}
                 </Button>
               </div>
             ))}
@@ -541,175 +597,175 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
       <ProductDetailModal
         product={favSelectedProduct}
         onClose={closeFavModal}
-        onAddToCart={(id, qty) => {
-          console.log("Add to cart depuis favoris", id, qty);
+        onAddToCart={async (id, qty) => {
+          await handleAddFavToCart(id, qty, favSelectedProduct?.isLocation);
+          closeFavModal(); // optionnel mais pratique
         }}
-        // ✅ PAS de onToggleFavorite => coeur caché
       />
     )}
   </>
   );
 
-  const renderWallet = () => (
-    <>
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Solde */}
-        <Card className="border-l-4 border-l-[#2D8A47] shadow-md">
-          <CardHeader className="bg-green-50 to-white">
-            <CardTitle className="flex items-center text-[#2D8A47]">
-              <CreditCard className="h-5 w-5 mr-2" /> Wallet Tsena
-            </CardTitle>
-          </CardHeader>
+  // const renderWallet = () => (
+  //   <>
+  //     <div className="grid lg:grid-cols-2 gap-6">
+  //       {/* Solde */}
+  //       <Card className="border-l-4 border-l-[#2D8A47] shadow-md">
+  //         <CardHeader className="bg-green-50 to-white">
+  //           <CardTitle className="flex items-center text-[#2D8A47]">
+  //             <CreditCard className="h-5 w-5 mr-2" /> Wallet Tsena
+  //           </CardTitle>
+  //         </CardHeader>
 
-          <CardContent className="text-center">
-            <div className="text-3xl font-bold text-[#2D8A47] mb-2">
-              {walletBalance.toLocaleString()} Ar
-            </div>
+  //         <CardContent className="text-center">
+  //           <div className="text-3xl font-bold text-[#2D8A47] mb-2">
+  //             {walletBalance.toLocaleString()} Ar
+  //           </div>
 
-            <p className="text-gray-600 mb-6">Solde disponible</p>
+  //           <p className="text-gray-600 mb-6">Solde disponible</p>
 
-            <div className="grid gap-3">
-              <Button
-                className="bg-[#2D8A47] text-white"
-                onClick={() => setIsRechargeModalOpen(true)}
-              >
-                Recharger le wallet
-              </Button>
+  //           <div className="grid gap-3">
+  //             <Button
+  //               className="bg-[#2D8A47] text-white"
+  //               onClick={() => setIsRechargeModalOpen(true)}
+  //             >
+  //               Recharger le wallet
+  //             </Button>
 
-              <Button
-                variant="outline"
-                className="border-[#2D8A47] text-[#2D8A47]"
-                onClick={() =>
-                  toast.info("Fonctionnalité bientôt disponible.")
-                }
-              >
-                Transférer des fonds
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+  //             <Button
+  //               variant="outline"
+  //               className="border-[#2D8A47] text-[#2D8A47]"
+  //               onClick={() =>
+  //                 toast.info("Fonctionnalité bientôt disponible.")
+  //               }
+  //             >
+  //               Transférer des fonds
+  //             </Button>
+  //           </div>
+  //         </CardContent>
+  //       </Card>
 
-        {/* Paiements mobiles */}
-        <Card className="border-l-4 border-l-blue-500 shadow-md">
-          <CardHeader className="bg-blue-50 to-white">
-            <CardTitle className="flex items-center text-blue-600">
-              💳 Paiements mobiles
-            </CardTitle>
-          </CardHeader>
+  //       {/* Paiements mobiles */}
+  //       <Card className="border-l-4 border-l-blue-500 shadow-md">
+  //         <CardHeader className="bg-blue-50 to-white">
+  //           <CardTitle className="flex items-center text-blue-600">
+  //             💳 Paiements mobiles
+  //           </CardTitle>
+  //         </CardHeader>
 
-          <CardContent className="space-y-4">
-            {/* MVola */}
-            <div className="flex justify-between p-3 bg-red-50 border rounded-lg">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-red-500 text-white rounded-lg flex items-center justify-center font-bold">
-                  M
-                </div>
-                <div>
-                  <p className="font-medium">MVola</p>
-                  <p className="text-sm text-gray-600">Connecté</p>
-                </div>
-              </div>
-              <Badge className="bg-green-100 text-green-700">Actif</Badge>
-            </div>
+  //         <CardContent className="space-y-4">
+  //           {/* MVola */}
+  //           <div className="flex justify-between p-3 bg-red-50 border rounded-lg">
+  //             <div className="flex items-center space-x-3">
+  //               <div className="w-10 h-10 bg-red-500 text-white rounded-lg flex items-center justify-center font-bold">
+  //                 M
+  //               </div>
+  //               <div>
+  //                 <p className="font-medium">MVola</p>
+  //                 <p className="text-sm text-gray-600">Connecté</p>
+  //               </div>
+  //             </div>
+  //             <Badge className="bg-green-100 text-green-700">Actif</Badge>
+  //           </div>
 
-            {/* OM */}
-            <div className="flex justify-between p-3 bg-orange-50 border rounded-lg">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-orange-500 text-white rounded-lg flex items-center justify-center font-bold">
-                  O
-                </div>
-                <div>
-                  <p className="font-medium">Orange Money</p>
-                  <p className="text-sm text-gray-600">Non connecté</p>
-                </div>
-              </div>
-              <Button size="sm" variant="outline" className="border-orange-300 text-orange-600">
-                Connecter
-              </Button>
-            </div>
+  //           {/* OM */}
+  //           <div className="flex justify-between p-3 bg-orange-50 border rounded-lg">
+  //             <div className="flex items-center space-x-3">
+  //               <div className="w-10 h-10 bg-orange-500 text-white rounded-lg flex items-center justify-center font-bold">
+  //                 O
+  //               </div>
+  //               <div>
+  //                 <p className="font-medium">Orange Money</p>
+  //                 <p className="text-sm text-gray-600">Non connecté</p>
+  //               </div>
+  //             </div>
+  //             <Button size="sm" variant="outline" className="border-orange-300 text-orange-600">
+  //               Connecter
+  //             </Button>
+  //           </div>
 
-            {/* Airtel */}
-            <div className="flex justify-between p-3 bg-red-50 border rounded-lg opacity-70">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-red-600 text-white rounded-lg flex items-center justify-center font-bold">
-                  A
-                </div>
-                <div>
-                  <p className="font-medium">Airtel Money</p>
-                  <p className="text-sm text-gray-600">Non connecté</p>
-                </div>
-              </div>
-              <Button size="sm" variant="outline" className="border-red-300 text-red-600">
-                Connecter
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+  //           {/* Airtel */}
+  //           <div className="flex justify-between p-3 bg-red-50 border rounded-lg opacity-70">
+  //             <div className="flex items-center space-x-3">
+  //               <div className="w-10 h-10 bg-red-600 text-white rounded-lg flex items-center justify-center font-bold">
+  //                 A
+  //               </div>
+  //               <div>
+  //                 <p className="font-medium">Airtel Money</p>
+  //                 <p className="text-sm text-gray-600">Non connecté</p>
+  //               </div>
+  //             </div>
+  //             <Button size="sm" variant="outline" className="border-red-300 text-red-600">
+  //               Connecter
+  //             </Button>
+  //           </div>
+  //         </CardContent>
+  //       </Card>
+  //     </div>
 
-      {/* Historique */}
-      <Card
-        className="mt-8"
-        style={{
-          borderLeft: "4px solid #6b7280", 
-        }}
-      >
-        <CardHeader
-          style={{
-            backgroundColor: "#f3f4f6",  
-            borderBottom: "1px solid #e5e7eb", 
-          }}
-        >
-          <CardTitle
-            className="flex items-center"
-            style={{ color: "#374151" }} 
-          >
-            <Clock className="h-5 w-5 mr-2" style={{ color: "#374151" }} />
-            Historique des transactions
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {transactions.map((t) => (
-              <div key={t.id} className="flex justify-between p-3 border rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      t.type === "recharge"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
-                  >
-                    {t.type === "recharge" ? "+" : "-"}
-                  </div>
+  //     {/* Historique */}
+  //     <Card
+  //       className="mt-8"
+  //       style={{
+  //         borderLeft: "4px solid #6b7280", 
+  //       }}
+  //     >
+  //       <CardHeader
+  //         style={{
+  //           backgroundColor: "#f3f4f6",  
+  //           borderBottom: "1px solid #e5e7eb", 
+  //         }}
+  //       >
+  //         <CardTitle
+  //           className="flex items-center"
+  //           style={{ color: "#374151" }} 
+  //         >
+  //           <Clock className="h-5 w-5 mr-2" style={{ color: "#374151" }} />
+  //           Historique des transactions
+  //         </CardTitle>
+  //       </CardHeader>
+  //       <CardContent>
+  //         <div className="space-y-3">
+  //           {transactions.map((t) => (
+  //             <div key={t.id} className="flex justify-between p-3 border rounded-lg">
+  //               <div className="flex items-center space-x-3">
+  //                 <div
+  //                   className={`w-8 h-8 rounded-full flex items-center justify-center ${
+  //                     t.type === "recharge"
+  //                       ? "bg-green-100 text-green-700"
+  //                       : "bg-red-100 text-red-700"
+  //                   }`}
+  //                 >
+  //                   {t.type === "recharge" ? "+" : "-"}
+  //                 </div>
 
-                  <div>
-                    <p className="font-medium text-sm">{t.description}</p>
-                    <p className="text-xs text-gray-500">
-                      {new Date(t.date).toLocaleDateString("fr-FR")} ·{" "}
-                      {new Date(t.date).toLocaleTimeString("fr-FR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                  </div>
-                </div>
+  //                 <div>
+  //                   <p className="font-medium text-sm">{t.description}</p>
+  //                   <p className="text-xs text-gray-500">
+  //                     {new Date(t.date).toLocaleDateString("fr-FR")} ·{" "}
+  //                     {new Date(t.date).toLocaleTimeString("fr-FR", {
+  //                       hour: "2-digit",
+  //                       minute: "2-digit",
+  //                     })}
+  //                   </p>
+  //                 </div>
+  //               </div>
 
-                <p
-                  className={`font-medium ${
-                    t.type === "recharge" ? "text-green-600" : "text-red-600"
-                  }`}
-                >
-                  {t.type === "recharge" ? "+" : ""}
-                  {t.amount.toLocaleString()} Ar
-                </p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </>
-  );
+  //               <p
+  //                 className={`font-medium ${
+  //                   t.type === "recharge" ? "text-green-600" : "text-red-600"
+  //                 }`}
+  //               >
+  //                 {t.type === "recharge" ? "+" : ""}
+  //                 {t.amount.toLocaleString()} Ar
+  //               </p>
+  //             </div>
+  //           ))}
+  //         </div>
+  //       </CardContent>
+  //     </Card>
+  //   </>
+  // );
 
   const renderProfile = () => {
   return (
@@ -864,12 +920,12 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
           <TabsContent value="client-dashboard">{renderDashboard()}</TabsContent>
           <TabsContent value="client-orders">{renderOrders()}</TabsContent>
           <TabsContent value="client-wishlist">{renderWishlist()}</TabsContent>
-          <TabsContent value="client-wallet">{renderWallet()}</TabsContent>
+          {/* <TabsContent value="client-wallet">{renderWallet()}</TabsContent> */}
           <TabsContent value="client-profile">{renderProfile()}</TabsContent>
         </Tabs>
       </div>
 
-      <RechargeWalletModal
+      {/* <RechargeWalletModal
         isOpen={isRechargeModalOpen}
         onClose={() => setIsRechargeModalOpen(false)}
         onRechargeSuccess={(amount, method) => {
@@ -886,7 +942,7 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
           ]);
         }}
         currentBalance={walletBalance}
-      />
+      /> */}
     </div>
   );
 }

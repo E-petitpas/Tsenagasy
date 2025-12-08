@@ -2,7 +2,6 @@
 
 import { Request, Response } from 'express'
 import prisma from '../config/db'
-import { supabaseAdmin } from "../config/supabase";
 
 // Ajout un produit en favori
 export const addFavori = async (req: Request, res: Response) => {

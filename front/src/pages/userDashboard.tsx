@@ -62,11 +62,7 @@ export default function UserDashboard({ currentUser, onLogout }: Props) {
   };
 
   useEffect(() => {
-    const savedTab = sessionStorage.getItem("userActiveTab") as typeof activeTab | null;
-    if (savedTab) {
-      setActiveTab(savedTab);
-    }
-
+    setActiveTab(currentUser.role === "vendor" ? "vendor" : "client-dashboard");
     loadFullProfile();
   }, []);
 
@@ -220,7 +216,7 @@ export default function UserDashboard({ currentUser, onLogout }: Props) {
             </div>
           </button>
 
-          <button
+          {/* <button
             onClick={() => setActiveTab("client-wallet")}
             className={`sub-btn ${activeTab === "client-wallet" ? "active" : ""}`}
           >
@@ -228,7 +224,7 @@ export default function UserDashboard({ currentUser, onLogout }: Props) {
             <div className={`ml-auto ${activeTab === "client-wallet" ? "icon-active" : "icon-inactive"}`}>
               <CreditCard size={16} />
             </div>
-          </button>
+          </button> */}
 
           <button
             onClick={() => setActiveTab("client-profile")}
@@ -290,7 +286,7 @@ export default function UserDashboard({ currentUser, onLogout }: Props) {
                 </div>
               </button>
 
-              <button
+              {/* <button
                 onClick={() => setActiveTab("vendor-analytics")}
                 className={`sub-btn ${activeTab === "vendor-analytics" ? "active" : ""}`}
               >
@@ -298,7 +294,7 @@ export default function UserDashboard({ currentUser, onLogout }: Props) {
                 <div className={`ml-auto ${activeTab === "vendor-analytics" ? "icon-active" : "icon-inactive"}`}>
                   <BarChart3 size={16} />
                 </div>
-              </button>
+              </button> */}
             </>
           )}
         </nav>
