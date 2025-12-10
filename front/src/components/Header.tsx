@@ -21,11 +21,20 @@ interface HeaderProps {
 export function Header({ cartItemCount = 0, onLoginClick, onCartClick, onProfileClick, onSearchClick, onNavigationClick, currentUser, onLogoutClick }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+
+    if (value.trim() === '') {
+      onSearchClick?.('');  // ça va remettre tous les produits
+    }
+  };
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim() && onSearchClick) {
-      onSearchClick(searchQuery.trim());
-    }
+    if (!onSearchClick) return;
+
+    onSearchClick(searchQuery.trim());
   };
 
   return (
@@ -68,12 +77,6 @@ export function Header({ cartItemCount = 0, onLoginClick, onCartClick, onProfile
                   >
                     Services
                   </button>
-                  <button 
-                    onClick={() => onNavigationClick?.('vendors')}
-                    className="text-lg hover:text-[#2D8A47] transition-colors text-left"
-                  >
-                    Vendeurs Locaux
-                  </button>
                 </nav>
               </SheetContent>
             </Sheet>
@@ -91,7 +94,7 @@ export function Header({ cartItemCount = 0, onLoginClick, onCartClick, onProfile
                   type="text"
                   placeholder="Rechercher des produits, marques, vendeurs..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={handleSearchChange}
                   className="w-full pl-4 pr-12 py-3 rounded-full border-2 border-gray-200 focus:border-[#2D8A47] focus:ring-0"
                 />
                 <Button 
@@ -180,25 +183,13 @@ export function Header({ cartItemCount = 0, onLoginClick, onCartClick, onProfile
             onClick={() => onNavigationClick?.('offers')}
             className="text-gray-700 hover:text-[#2D8A47] transition-colors"
           >
-            Offres du Jour
+            Offres
           </button>
           <button 
             onClick={() => onNavigationClick?.('services')}
             className="text-gray-700 hover:text-[#2D8A47] transition-colors"
           >
             Services
-          </button>
-          <button 
-            onClick={() => onNavigationClick?.('vendors')}
-            className="text-gray-700 hover:text-[#2D8A47] transition-colors"
-          >
-            Vendeurs Locaux
-          </button>
-          <button 
-            onClick={() => onNavigationClick?.('support')}
-            className="text-gray-700 hover:text-[#2D8A47] transition-colors"
-          >
-            Support
           </button>
         </nav>
       </div>

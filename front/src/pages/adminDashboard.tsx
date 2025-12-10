@@ -149,23 +149,41 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
 
   //afficher tous les comptes
   const fetchAccounts = async () => {
-    try {
-      const adminId = currentUser.id;
-      const res = await axios.get(`${API_BASE_URL}/getAllUser/${adminId}`);
-      const users = res.data.users.map((u: any) => ({
+  try {
+    const adminId = currentUser.id;
+    const res = await axios.get(`${API_BASE_URL}/getAllUser/${adminId}`);
+
+    const users = res.data.users.map((u: any) => {
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+      const lastLoginDate = u.lastLogin ? new Date(u.lastLogin) : null;
+      const referenceDate = lastLoginDate ?? new Date(u.createdAt);
+      const activityStatus = referenceDate < threeMonthsAgo ? "inactif" : "actif";
+
+      return {
         id: u.id,
-        name: u.nom,                
+        name: u.nom,
         email: u.email,
         role: u.role,
-        statut: u.statut || 'en_attente', 
-        activityStatus: u.activityStatus || 'inactif',              
-        joinDate: new Date(u.createdAt).toLocaleDateString(),
-      }));
-      setAccounts(users);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+
+        // ✅ Seuls les vendeurs ont un statut de magasin (badge)
+        statut:
+          u.role === "vendor"
+            ? u.magasinStatus || "en_attente"
+            : null, // ou undefined
+
+        activityStatus,
+        joinDate: new Date(u.createdAt).toLocaleDateString("fr-FR"),
+        lastLogin: lastLoginDate ? lastLoginDate.toLocaleDateString("fr-FR") : null,
+      };
+    });
+
+    setAccounts(users);
+  } catch (error) {
+    console.error(error);
+  }
+};
 
   //décision sur magasin
   const handleAdhesionDecision = async (idMagasin: string, decision: 'approuve' | 'refuse') => {
@@ -197,15 +215,70 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
     await axios.put(`${API_BASE_URL}/users/${id}/activate`);
     setAccounts(prev => prev.map(a => a.id === id ? { ...a, status: 'active' } : a));
   };
-//gestion de compte global
-  const handleReject = async (id: number) => {
-    await axios.delete(`${API_BASE_URL}/users/${id}`);
-    setAccounts(prev => prev.filter(a => a.id !== id));
-  };
+
   //gestion de compte global
-  const handleRoleChange = async (id: number, role: string) => {
-    await axios.put(`${API_BASE_URL}/users/${id}`, { role });
-    setAccounts(prev => prev.map(a => a.id === id ? { ...a, role } : a));
+  const handleReject = async (id: string) => {
+    await Swal.fire({
+      title: "Supprimer ce compte ?",
+      text: "Cette action est définitive.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Oui, supprimer",
+      cancelButtonText: "Annuler",
+      showLoaderOnConfirm: true,
+      allowOutsideClick: () => !Swal.isLoading(),
+      preConfirm: async () => {
+        try {
+          await axios.delete(`${API_BASE_URL}/admin/users/${id}`);
+        } catch (error: any) {
+          if (axios.isAxiosError(error) && error.response) {
+            // message backend affiché dans le modal
+            Swal.showValidationMessage(
+              error.response.data?.message ||
+                "Erreur lors de la suppression de l'utilisateur."
+            );
+          } else {
+            Swal.showValidationMessage(
+              "Erreur inattendue lors de la suppression."
+            );
+          }
+          throw error; // pour empêcher la fermeture automatique
+        }
+      },
+    }).then((result) => {
+      if (result.isConfirmed) {
+        toast.success("Utilisateur supprimé avec succès.");
+        // 🔄 on recharge proprement la liste
+        fetchAccounts();
+      }
+    });
+  };
+  
+  //gestion de compte global
+  const handleRoleChange = async (id: string, role: string) => {
+    try {
+      const res = await axios.put(`${API_BASE_URL}/user/${id}`, { role });
+
+      // Mise à jour locale immédiate
+      setAccounts(prev =>
+        prev.map(a => (a.id === id ? { ...a, role } : a))
+      );
+
+      // Si le backend a créé un magasin → recharger la liste
+      await fetchAccounts();
+
+      toast.success(
+        role === "vendor"
+          ? "L'utilisateur est maintenant vendeur. Magasin créé automatiquement 🎉"
+          : "Rôle mis à jour avec succès."
+      );
+
+    } catch (error) {
+      console.error("Erreur mise à jour rôle:", error);
+      toast.error("Erreur lors de la mise à jour du rôle.");
+    }
   };
   
   const handleLogout = () => {
@@ -776,7 +849,16 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
                             </select>
                           </td>
                           <td className="px-4 py-3">
-                            <StatusBadge status={account.statut} />
+                            {account.role === "vendor" && account.statut ? (
+                              <StatusBadge status={account.statut} />
+                            ) : (
+                              <span style={{
+                                fontSize: "20px",      
+                                fontWeight: 600,       
+                                display: "inline-block",
+                                lineHeight: 1,
+                              }}>-</span>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             <StatusBadge status={account.activityStatus} />

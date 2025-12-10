@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Header } from '../components/Header';
@@ -19,14 +19,33 @@ interface HomePrivateProps {
   onLogout: () => void;
 }
 
+type ProductFilter = 'all' | 'services';
+
 export default function HomePrivate({currentUser, onLogout }: HomePrivateProps) {
 
   const navigate = useNavigate();
   const { itemCount, addToCart, refreshCart } = useCart();
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const produitsRef = useRef<HTMLDivElement | null>(null);
+  const [productFilter, setProductFilter] = useState<ProductFilter>('all');
+  const [categories, setCategories] = useState<{ id: string; nom: string }[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
+  const [showCategoryFilter, setShowCategoryFilter] = useState(false);
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
-
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/getCategories`);
+        setCategories(res.data);
+      } catch (err) {
+        console.error("Erreur récupération catégories:", err);
+      }
+    };
+    fetchCategories();
+  }, []);
+  
   useEffect(() => {
   const url = new URL(window.location.href);
   const payment = url.searchParams.get("payment");
@@ -48,11 +67,9 @@ export default function HomePrivate({currentUser, onLogout }: HomePrivateProps) 
         allowOutsideClick: false,
         allowEscapeKey: false,
         showCancelButton: false,
-        // ❌ plus de preConfirm, plus de showLoaderOnConfirm
       });
 
       if (result.isConfirmed) {
-        // On lance la confirmation sans bloquer l’UX
 
         axios.post(`${API_BASE_URL}/payments/confirm-order`, {
           session_id: sessionId,
@@ -85,11 +102,77 @@ export default function HomePrivate({currentUser, onLogout }: HomePrivateProps) 
         currentUser={currentUser}  
         onLoginClick={() => {}}
         onCartClick={() => setIsCartOpen(true)}
-        onSearchClick={() => setCurrentPage('search')}
-        onNavigationClick={() => {}}
+        onSearchClick={(query) => {               
+          setCurrentPage('search');
+          setSearchQuery(query);
+          produitsRef.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+          });
+        }}
+        onNavigationClick={(section) => {
+          if (section === 'services') {
+            setProductFilter('services');
+            setShowCategoryFilter(false);
+            setSelectedCategoryId('all');
+          } else if (section === 'categories') {
+            // 👉 juste ouvrir le filtre, PAS de scroll/redirection
+            setProductFilter('all');
+            setShowCategoryFilter((prev) => !prev); // toggle
+          } else {
+            // "offers" ou autre
+            setProductFilter('all');
+            setShowCategoryFilter(false);
+            setSelectedCategoryId('all');
+          }
+
+          // 👉 on scroll SEULEMENT si ce n'est PAS "categories"
+          if (section !== 'categories') {
+            produitsRef.current?.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start',
+            });
+          }
+        }}
         onProfileClick={() => navigate('/dashboard')}
         onLogoutClick={onLogout}
       />
+      {/* 🔹 Barre de filtre catégories sous le header (simple, non flottant) */}
+      {showCategoryFilter && (
+        <div className="bg-white border-b border-gray-100">
+          <div className="container mx-auto px-4 py-2 flex items-center gap-2">
+
+            <select
+              value={selectedCategoryId}
+              onChange={(e) => setSelectedCategoryId(e.target.value)}
+              className="
+                border border-gray-300 
+                rounded-md 
+                px-3 py-1.5 
+                text-sm 
+                bg-white
+                focus:outline-none
+                focus:ring-2
+                focus:ring-[#2D8A47]/40
+              "
+            >
+              <option value="all">Toutes les catégories</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.nom}>
+                  {cat.nom}
+                </option>
+              ))}
+            </select>
+
+            <button
+              onClick={() => setShowCategoryFilter(false)}
+              className="text-xs text-gray-400 hover:text-gray-600 ml-1"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* MODAL PANIER FLOTTANT */}
       <CartModal
@@ -104,16 +187,20 @@ export default function HomePrivate({currentUser, onLogout }: HomePrivateProps) 
         <PromoBanner isPublicHome={false} onAddToCart={(id) => addToCart(id, 1)}/>
 
         {/* ---------------- PRODUITS ---------------- */}
-        <ProductGrid
-          onAddToCart={(id, qty) => addToCart(id, qty ?? 1)} userId={currentUser.id}
-        />
+        <div ref={produitsRef}>
+          <ProductGrid
+            onAddToCart={(id, qty) => addToCart(id, qty ?? 1)} userId={currentUser.id} filterMode={productFilter}
+            category={selectedCategoryId === 'all' ? null : selectedCategoryId}
+            searchQuery={searchQuery}
+            />
+        </div>
 
         {/* ---------------- QUICK SERVICES (adapté connecté) ---------------- */}
         <section className="py-12 bg-white">
           <div className="container mx-auto px-4 text-center">
             <h2 className="text-2xl font-bold mb-6">Accès rapide</h2>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="flex flex-wrap justify-center gap-6">
               
               {/* DASHBOARD */}
               <button
@@ -122,17 +209,17 @@ export default function HomePrivate({currentUser, onLogout }: HomePrivateProps) 
               >
                 <div className="text-4xl mb-3">📊</div>
                 <h3 className="font-semibold">Mon compte</h3>
-                <p className="text-gray-600 text-sm">Profil, commandes, wallet</p>
+                <p className="text-gray-600 text-sm">Profil, commandes, favoris</p>
               </button>
 
-              {/* WALLET */}
+              {/* PANIER */}
               <button
                 className="p-6 border rounded-lg hover:shadow-md transition text-center"
-                onClick={() => navigate('/dashboard')}
+                onClick={() => setIsCartOpen(true)}
               >
-                <div className="text-4xl mb-3">💰</div>
-                <h3 className="font-semibold">Mon Wallet</h3>
-                <p className="text-gray-600 text-sm">Recharger & transférer</p>
+                <div className="text-4xl mb-3">🛒</div>
+                <h3 className="font-semibold">Mon panier</h3>
+                <p className="text-gray-600 text-sm">Voir et valider ma commande</p>
               </button>
 
               {/* VENTES */}
@@ -146,16 +233,6 @@ export default function HomePrivate({currentUser, onLogout }: HomePrivateProps) 
                   <p className="text-gray-600 text-sm">Gérer ma boutique</p>
                 </button>
               )}
-
-              {/* RECHERCHE */}
-              <button
-                className="p-6 border rounded-lg hover:shadow-md transition text-center"
-                onClick={() => setCurrentPage('search')}
-              >
-                <div className="text-4xl mb-3">🔍</div>
-                <h3 className="font-semibold">Recherche</h3>
-                <p className="text-gray-600 text-sm">Trouver un produit</p>
-              </button>
 
             </div>
           </div>

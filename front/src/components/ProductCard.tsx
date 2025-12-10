@@ -31,6 +31,8 @@ export const ProductCard: React.FC<Props> = ({ product, onProductClick, onAddToC
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
 
+  const isOutOfStock = product.stock <= 0;
+  
   const getTypePrixSuffix = () => {
     if (!product.isLocation) return "";
     const tp = product.typePrix?.toLowerCase().trim();
@@ -204,72 +206,93 @@ export const ProductCard: React.FC<Props> = ({ product, onProductClick, onAddToC
 
         {/* Bouton */}
         {onAddToCart && (
-          <button
-            onClick={async (e) => {
-            e.stopPropagation();
-            if (adding || product.stock <= 0) return;
+          <>
+            {isOutOfStock ? (
+              // 👉 Affichage clair en cas de rupture
+              <div
+                className="w-full rounded-md border border-dashed flex items-center justify-center"
+                style={{
+                  marginTop: "8px",
+                  padding: "7px 10px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  backgroundColor: "rgba(255,255,255,0.08)",
+                  color: "#fecaca", // rouge clair
+                  borderColor: "rgba(248,113,113,0.6)", // rouge
+                }}
+              >
+                Rupture de stock
+              </div>
+            ) : (
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (adding) return;
 
-            setAdding(true);
+                  setAdding(true);
 
-            // ✅ SweetAlert qui fige l'UI
-            Swal.fire({
-              title: "Ajout au panier...",
-              text: "Merci de patienter",
-              allowOutsideClick: false,
-              allowEscapeKey: false,
-              showConfirmButton: false,
-              didOpen: () => {
-                Swal.showLoading();
-              },
-            });
+                  Swal.fire({
+                    title: "Ajout au panier...",
+                    text: "Merci de patienter",
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => {
+                      Swal.showLoading();
+                    },
+                  });
 
-            try {
-              await onAddToCart(product.id, 1);
+                  try {
+                    await onAddToCart(product.id, 1);
 
-              // ✅ petit feedback rapide
-              Swal.fire({
-                icon: "success",
-                title: "Ajouté !",
-                timer: 900,
-                showConfirmButton: false,
-              });
-            } catch (err: any) {
-              Swal.fire({
-                icon: "error",
-                title: "Erreur",
-                text: err?.response?.data?.error || err?.message || "Impossible d'ajouter au panier",
-              });
-            } finally {
-              setAdding(false);
-            }
-          }}
-          disabled={adding || product.stock <= 0}
-            className="w-full font-semibold bg-white text-[#2D8A47]
-                       rounded-md shadow hover:bg-[#F9FAFB] transition
-                       flex items-center justify-center gap-2"
-            style={{
-              marginTop: "8px",
-              padding: "7px 10px",
-              fontSize: "13px",
-            }}
-          >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#2D8A47"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <circle cx="9" cy="21" r="1" />
-              <circle cx="20" cy="21" r="1" />
-              <path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6" />
-            </svg>
-            Ajouter au panier
-          </button>
+                    Swal.fire({
+                      icon: "success",
+                      title: "Ajouté !",
+                      timer: 900,
+                      showConfirmButton: false,
+                    });
+                  } catch (err: any) {
+                    Swal.fire({
+                      icon: "error",
+                      title: "Erreur",
+                      text:
+                        err?.response?.data?.error ||
+                        err?.message ||
+                        "Impossible d'ajouter au panier",
+                    });
+                  } finally {
+                    setAdding(false);
+                  }
+                }}
+                disabled={adding}
+                className="w-full font-semibold bg-white text-[#2D8A47]
+                           rounded-md shadow hover:bg-[#F9FAFB] transition
+                           flex items-center justify-center gap-2"
+                style={{
+                  marginTop: "8px",
+                  padding: "7px 10px",
+                  fontSize: "13px",
+                }}
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#2D8A47"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="9" cy="21" r="1" />
+                  <circle cx="20" cy="21" r="1" />
+                  <path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6" />
+                </svg>
+                Ajouter au panier
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

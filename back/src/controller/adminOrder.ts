@@ -170,6 +170,10 @@ export const checkLineVendor = async (req: Request, res: Response) => {
 
       const qte = ligne.quantite;
 
+      if (!ligne.produitId) {
+        return { error: "PRODUIT_INDISPONIBLE" };
+      }
+
       // 2) décrémenter stock SEULEMENT si stock suffisant
       const dec = await tx.produit.updateMany({
         where: {

@@ -268,7 +268,7 @@ export function PromoBanner({ isPublicHome = false, onAddToCart, onVendorLogin }
               </div>
               <div>
                 <h3 className="font-medium">Livraison rapide</h3>
-                <p className="text-sm text-gray-600">24–48h</p>
+                <p className="text-sm text-gray-600">Tana : 24–72h • Province : 5–14 jours</p>
               </div>
             </div>
 
@@ -278,7 +278,7 @@ export function PromoBanner({ isPublicHome = false, onAddToCart, onVendorLogin }
               </div>
               <div>
                 <h3 className="font-medium">Paiement sécurisé</h3>
-                <p className="text-sm text-gray-600">Mvola • OM • Airtel</p>
+                <p className="text-sm text-gray-600">Carte Visa & Mastercard via Stripe</p>
               </div>
             </div>
 

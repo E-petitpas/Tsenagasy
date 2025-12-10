@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Header } from '../components/Header';
@@ -6,11 +6,13 @@ import { AuthModal } from '../components/AuthModal';
 import { PromoBanner } from '../components/PromoBanner';
 import { ProductGrid } from '../components/productGrid';
 import { VendorAuthModal } from '../components/vendorAuthModal';
-
+import { API_BASE_URL } from '../config/api';
 import { toast } from 'sonner';
 import { UserData } from '../config/authStorage';
+import axios from 'axios';
 
 type Page = 'home' | 'search';
+type ProductFilter = 'all' | 'services';
 
 interface HomePublicProps {
   currentUser: UserData | null;
@@ -22,9 +24,28 @@ export default function HomePublic({ currentUser, onLogin, }: HomePublicProps) {
   const navigate = useNavigate();
 
   const [currentPage, setCurrentPage] = useState<Page>('home');
-
+  const [productFilter, setProductFilter] = useState<ProductFilter>('all');
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  const produitsRef = useRef<HTMLDivElement | null>(null);
+  
+  const [categories, setCategories] = useState<{ id: string; nom: string }[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
+  const [showCategoryFilter, setShowCategoryFilter] = useState(false);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/getCategories`);
+        setCategories(res.data);
+      } catch (err) {
+        console.error("Erreur récupération catégories:", err);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   // -------------------------
   // Login
@@ -55,18 +76,82 @@ export default function HomePublic({ currentUser, onLogin, }: HomePublicProps) {
           toast.error("Connectez-vous pour voir votre panier");
           setIsAuthModalOpen(true);
         }}
-        onSearchClick={(query) => {
-          toast.info(`Recherche: ${query}`);
+        onSearchClick={(query) => {                      
           setCurrentPage('search');
+          setSearchQuery(query);
+          produitsRef.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+          });
         }}
         onNavigationClick={(section) => {
-          toast.info(`Section: ${section}`);
+          if (section === 'services') {
+            setProductFilter('services');
+            setShowCategoryFilter(false);
+            setSelectedCategoryId('all');
+
+            produitsRef.current?.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start',
+            });
+          } else if (section === 'categories') {
+            setProductFilter('all');
+            setShowCategoryFilter(prev => !prev);
+            // 👉 pas de scroll
+          } else {
+            // offers ou autre
+            setProductFilter('all');
+            setShowCategoryFilter(false);
+            setSelectedCategoryId('all');
+
+            produitsRef.current?.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start',
+            });
+          }
         }}
         onProfileClick={() => {
           toast.error("Connexion requise");
           setIsAuthModalOpen(true);
         }}
       />
+
+      {/* 🔹 Barre de filtre catégories sous le header (simple, non flottant) */}
+      {showCategoryFilter && (
+        <div className="bg-white border-b border-gray-100">
+          <div className="container mx-auto px-4 py-2 flex items-center gap-2">
+
+            <select
+              value={selectedCategoryId}
+              onChange={(e) => setSelectedCategoryId(e.target.value)}
+              className="
+                border border-gray-300 
+                rounded-md 
+                px-3 py-1.5 
+                text-sm 
+                bg-white
+                focus:outline-none
+                focus:ring-2
+                focus:ring-[#2D8A47]/40
+              "
+            >
+              <option value="all">Toutes les catégories</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.nom}>
+                  {cat.nom}
+                </option>
+              ))}
+            </select>
+
+            <button
+              onClick={() => setShowCategoryFilter(false)}
+              className="text-xs text-gray-400 hover:text-gray-600 ml-1"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ---------------- MODAL LOGIN ---------------- */}
       <AuthModal
@@ -87,9 +172,14 @@ export default function HomePublic({ currentUser, onLogin, }: HomePublicProps) {
         <PromoBanner isPublicHome={true} onAddToCart={handlePublicAddToCart} onVendorLogin={handleLoginSuccess}/>
 
         {/* ---------------- PRODUITS POPULAIRES ---------------- */}
-        <ProductGrid
-          onAddToCart={handlePublicAddToCart}
-        />
+        <div ref={produitsRef}>
+          <ProductGrid
+            onAddToCart={handlePublicAddToCart}
+            filterMode={productFilter}
+            category={selectedCategoryId === 'all' ? null : selectedCategoryId}
+            searchQuery={searchQuery}
+            />
+        </div>
 
         {/* ---------------- VENDEURS PARTENAIRES ---------------- */}
         <section className="py-12 bg-white">

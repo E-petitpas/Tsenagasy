@@ -16,7 +16,8 @@ router.get('/getAdhesion/vendor', user.adhesionVendor); // ok
 router.put('/adhesionDecision/:idMagasin', user.updateVendorStatus); //ok
 router.delete('/deleteAdhesion/:idMagasin', user.deleteAdhesion); //ok
 router.get('/getAllUser/:adminId', user.getAllUsers); //ok
-
+router.delete('/admin/users/:id', user.deleteUser); //ok
+router.put('/user/:id', user.updateUserRole); //ok
 
 import * as product from '../controller/productController'
 router.get('/getCategories', product.getCategories); //ok
@@ -74,6 +75,6 @@ router.get('/vendor/lignes-vente/:magasinId/recent', order.getRecentLinesForVend
 import * as payment from '../controller/paymentController'
 router.post("/payments/create-checkout-session", payment.createCheckoutSession); //ok
 router.get("/payments/session-status", payment.sessionStatus); //ok
-router.post("/payments/confirm-order", payment.confirmOrderPayment);
+router.post("/payments/confirm-order", payment.confirmOrderPayment); //ok
 
 export default router;

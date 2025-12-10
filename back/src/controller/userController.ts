@@ -5,6 +5,7 @@ import prisma from '../config/db'
 import * as jwt from 'jsonwebtoken'
 import { supabase } from '../config/supabase'
 import Stripe from "stripe";
+import { supabaseAdmin } from '../config/supabase';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -348,31 +349,233 @@ export const deleteAdhesion = async (req: Request, res: Response) => {
   }
 };
 
-// Récupérer tous les utilisateurs avec rôle
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
     const { adminId } = req.params;
 
     const users = await prisma.utilisateur.findMany({
       where: { id: { not: adminId } },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      include: {
+        magasins: {
+          select: {
+            statut: true,
+          },
+        },
+      },
     });
 
     // Formater les données de retour
-    const formattedUsers = users.map(u => ({
-      id: u.id,
-      nom: u.nom,
-      email: u.email,
-      tel: u.tel,
-      adresse: u.adresse,
-      role: u.role,
-      createdAt: u.createdAt,
-      lastLogin: u.lastLogin
-    }));
+    const formattedUsers = users.map((u) => {
+      // par défaut pas de statut magasin
+      let magasinStatus: string | null = null;
+
+      // si c'est un vendeur, on prend le statut de son premier magasin (si existe)
+      if (u.role === "vendor" && u.magasins.length > 0) {
+        magasinStatus = u.magasins[0].statut; // ex: "en_attente", "refuse", "approuve"
+      }
+
+      return {
+        id: u.id,
+        nom: u.nom,
+        email: u.email,
+        tel: u.tel,
+        adresse: u.adresse,
+        role: u.role,
+        createdAt: u.createdAt,
+        lastLogin: u.lastLogin,
+        magasinStatus, // 🔥 nouveau champ
+      };
+    });
 
     return res.json({ users: formattedUsers });
   } catch (error) {
-    console.error('Erreur getAllUsers:', error);
-    return res.status(500).json({ message: 'Erreur serveur', error });
+    console.error("Erreur getAllUsers:", error);
+    return res.status(500).json({ message: "Erreur serveur", error });
+  }
+};
+
+//supprimer un utilisateur
+export const deleteUser = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params; // id Prisma (UUID)
+
+    if (!id) {
+      return res.status(400).json({ message: "ID utilisateur manquant" });
+    }
+
+    // 1) Vérifier l'utilisateur existe
+    const user = await prisma.utilisateur.findUnique({
+      where: { id },
+      include: {
+        magasins: {
+          include: {
+            produits: {
+              include: {
+                produitLocation: true,
+                Sponsor: true,
+              },
+            },
+          },
+        },
+        paniers: true,
+        favoris: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "Utilisateur introuvable" });
+    }
+
+    if (user.supabaseId && supabaseAdmin) {
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(user.supabaseId);
+      if (error) console.error("Supabase deleteUser error:", error);
+    }
+
+    await prisma.$transaction(async (tx) => {
+
+      // A) Supprimer les FAVORIS (user→favori)
+      await tx.favori.deleteMany({
+        where: { userId: id },
+      });
+
+      // B) Supprimer les PANIERS + lignes
+      for (const panier of user.paniers) {
+        await tx.lignePanier.deleteMany({
+          where: { idPanier: panier.id },
+        });
+
+        await tx.panier.delete({
+          where: { id: panier.id },
+        });
+      }
+
+      // C) Supprimer les MAGASINS + PRODUITS + SPONSOR + PRODUIT_LOCATION
+      for (const magasin of user.magasins) {
+        for (const produit of magasin.produits) {
+          // produitLocation
+          if (produit.produitLocation) {
+            await tx.produitLocation.delete({
+              where: { id: produit.produitLocation.id },
+            });
+          }
+
+          // sponsor
+          if (produit.Sponsor) {
+            await tx.sponsor.delete({
+              where: { id: produit.Sponsor.id },
+            });
+          }
+
+          // lignesPanier liées au produit
+          await tx.lignePanier.deleteMany({
+            where: { idProduit: produit.id },
+          });
+
+          // supprimer produit
+          await tx.produit.delete({
+            where: { id: produit.id },
+          });
+        }
+
+        // supprimer le magasin
+        await tx.magasin.delete({
+          where: { id_magasin: magasin.id_magasin },
+        });
+      }
+
+      // D) supprimer utilisateur
+      await tx.utilisateur.delete({
+        where: { id },
+      });
+    });
+
+    return res.json({ message: "Utilisateur supprimé avec succès" });
+  } catch (error: any) {
+    console.error("Erreur deleteUser:", error);
+
+    return res.status(500).json({
+      message: "Erreur serveur lors de la suppression de l'utilisateur",
+      detail: error?.message,
+    });
+  }
+};
+
+// modifier role
+export const updateUserRole = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+
+    if (!role) {
+      return res.status(400).json({ message: "Role manquant" });
+    }
+
+    // 1) Vérifier l'utilisateur
+    const user = await prisma.utilisateur.findUnique({
+      where: { id },
+      include: {
+        magasins: {
+          include: { produits: true }
+        }
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "Utilisateur introuvable" });
+    }
+
+    // 2) Gestion VENDOR → CREATION MAGASIN
+    if (role === "vendor") {
+      const hasShop = user.magasins.length > 0;
+
+      if (!hasShop) {
+        await prisma.magasin.create({
+          data: {
+            nom_Magasin: `${user.nom} Shop`,
+            type: "freelance",
+            statut: "approuve",
+            id_proprietaire: id,
+          },
+        });
+      }
+    }
+
+    // 3) Gestion CLIENT → SUPPRESSION SHOP + PRODUITS
+    if (role === "client") {
+      for (const shop of user.magasins) {
+        
+        const produits = await prisma.produit.findMany({
+          where: { magasinId: shop.id_magasin },
+          select: { id: true }
+        });
+
+        for (const p of produits) {
+          await prisma.produit.delete({ where: { id: p.id } });
+        }
+
+        await prisma.magasin.delete({
+          where: { id_magasin: shop.id_magasin },
+        });
+      }
+    }
+
+    // 4) Mise à jour du rôle
+    const updatedUser = await prisma.utilisateur.update({
+      where: { id },
+      data: { role },
+    });
+
+    return res.json({
+      message: "Rôle mis à jour avec succès",
+      user: updatedUser,
+    });
+
+  } catch (error) {
+    console.error("Erreur updateUserRole:", error);
+    return res.status(500).json({
+      message: "Erreur serveur",
+      detail: error instanceof Error ? error.message : error,
+    });
   }
 };

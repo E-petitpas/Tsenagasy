@@ -30,6 +30,12 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
       textColor = "#7C2D12"; 
       borderColor = "#EA580C";
       break;
+    case "actif":
+      label = "Actif";
+      bgColor = "#BBF7D0";   // vert très clair
+      textColor = "#166534"; // vert foncé
+      borderColor = "#22C55E";
+      break;
     case "brouillon":
     case "inactif":
       label = normalized === "brouillon" ? "Brouillon" : "Inactif";
