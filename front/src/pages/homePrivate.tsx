@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Header } from '../components/Header';
@@ -7,6 +7,10 @@ import { ProductGrid } from '../components/productGrid';
 import { CartModal } from '../components/CartModal';
 import { useCart } from "../context/cartContext";
 import { UserData } from '../config/authStorage';
+import Swal from 'sweetalert2';
+import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
+import { toast } from 'sonner';
 
 type Page = 'home' | 'search';
 
@@ -18,9 +22,56 @@ interface HomePrivateProps {
 export default function HomePrivate({currentUser, onLogout }: HomePrivateProps) {
 
   const navigate = useNavigate();
-  const { itemCount, addToCart } = useCart();
+  const { itemCount, addToCart, refreshCart } = useCart();
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [isCartOpen, setIsCartOpen] = useState(false);
+
+
+  useEffect(() => {
+  const url = new URL(window.location.href);
+  const payment = url.searchParams.get("payment");
+  const sessionId = url.searchParams.get("session_id");
+
+  if (payment === "success" && sessionId) {
+    // 1) Nettoyer l’URL
+    url.searchParams.delete("payment");
+    url.searchParams.delete("session_id");
+    window.history.replaceState({}, "", url.pathname + url.search);
+
+    // 2) SweetAlert (visuel identique) + confirmation en arrière-plan
+    (async () => {
+      const result = await Swal.fire({
+        title: "Paiement réussi 🎉",
+        text: "Clique sur OK pour finaliser ta commande et recevoir ta facture.",
+        icon: "success",
+        confirmButtonText: "OK",
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showCancelButton: false,
+        // ❌ plus de preConfirm, plus de showLoaderOnConfirm
+      });
+
+      if (result.isConfirmed) {
+        // On lance la confirmation sans bloquer l’UX
+
+        axios.post(`${API_BASE_URL}/payments/confirm-order`, {
+          session_id: sessionId,
+        })
+          .then(async ({ data }) => {
+            await refreshCart?.();
+            toast.success("Commande finalisée, facture envoyée par email ✔", {
+            });
+          })
+          .catch((e: any) => {
+            const msg =
+              e?.response?.data?.error ||
+              e?.message ||
+              "Impossible de confirmer le paiement";
+          });
+      }
+    })();
+  }
+}, [refreshCart]);
   
   // ---------------------------
   // HOME PRIVATE

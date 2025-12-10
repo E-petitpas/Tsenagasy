@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Minus, Plus, Trash2, ChevronLeft, Truck } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -12,13 +12,16 @@ import Swal from "sweetalert2";
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
 import { UserData } from '../config/authStorage';
-import { getCartApi } from "../services/cartServices";
+import { loadStripe } from "@stripe/stripe-js";
+import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 
 interface CartCheckoutProps {
   onBack: () => void;
   currentUser: UserData;
   inModal?: boolean;
 }
+
+const stripePromise = loadStripe("pk_test_51ScVvKA92A38UUOZZyGQLyPdgKtMR3lNvYTWazRkDxVqqhmL54OqaBCBT8ABPPR0aCn4l29juirq9RrZIEJ9XSL900sQsJeh58");
 
 export function CartCheckout({ onBack, currentUser, inModal = false }: CartCheckoutProps) {
   const { cart, loading, error, updateQty, removeFromCart, refreshCart } = useCart();
@@ -40,9 +43,12 @@ export function CartCheckout({ onBack, currentUser, inModal = false }: CartCheck
     shipping.phone.trim() &&
     shipping.address.trim() &&
     shipping.city.trim() && shipping.district;
-
+  
   // seulement 2 étapes
-  const [step, setStep] = useState<'cart' | 'shipping'>('cart');
+  const [step, setStep] = useState<'cart' | 'payment' | 'shipping'>('cart');
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [stripeSessionId, setStripeSessionId] = useState<string | null>(null);
+
 
   const formatPrice = (price: number) =>
     new Intl.NumberFormat('mg-MG').format(price) + ' Ar';
@@ -118,6 +124,7 @@ export function CartCheckout({ onBack, currentUser, inModal = false }: CartCheck
       total,
     };
 
+    console.log(payload);
     const { data } = await axios.post(`${API_BASE_URL}/add/order`, payload);
     return data; // venteId etc
   }
@@ -132,12 +139,20 @@ export function CartCheckout({ onBack, currentUser, inModal = false }: CartCheck
     try {
       const order = await createOrder();
 
-      toast.success("Commande créée");
-      await refreshCart();
-      // - revenir au panier
-      setStep("cart");
+      console.log("VENTE ID =", order.venteId);
 
-      // onBack();
+    const { data } = await axios.post(
+      `${API_BASE_URL}/payments/create-checkout-session`,
+      { orderId: order.venteId }
+    );
+
+    if (!data.clientSecret) {
+      throw new Error("clientSecret Stripe manquant");
+    }
+
+      setClientSecret(data.clientSecret);
+      setStripeSessionId(data.sessionId);
+      setStep("payment");
 
     } catch (e: any) {
       toast.error(e.message || "Erreur création commande");
@@ -145,7 +160,9 @@ export function CartCheckout({ onBack, currentUser, inModal = false }: CartCheck
       setIsOrdering(false);
     }
   };
+
   
+  // 
   // ---------------------------------------
   // ÉTAPE 1 : PANIER
   // ---------------------------------------
@@ -328,6 +345,14 @@ export function CartCheckout({ onBack, currentUser, inModal = false }: CartCheck
     );
   }
 
+  if (step === "payment" && clientSecret) {
+    return (
+      <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret }}>
+        <EmbeddedCheckout/>
+      </EmbeddedCheckoutProvider>
+    );
+  }
+
   // ---------------------------------------
   // ÉTAPE 2 : ADRESSE LIVRAISON + PAYER
   // ---------------------------------------
@@ -476,18 +501,15 @@ export function CartCheckout({ onBack, currentUser, inModal = false }: CartCheck
                   </div>
                 </div>
 
-                {/* ✅ bouton PayPal placeholder */}
+                {/* bouton stripe placeholder */}
                 <Button
                   className="w-full mt-3 bg-[#2D8A47] hover:bg-[#245A35]"
                   onClick={handlePlaceOrder}
                   disabled={isOrdering}
                 >
-                  {isOrdering ? "Création..." : "Payer avec PayPal"}
+                  {isOrdering ? "Confirmation de la commande..." : "Confirmer la commande"}
                 </Button>
 
-                <p className="text-xs text-gray-500 text-center">
-                  PayPal sera activé dès que ton compte est prêt.
-                </p>
               </CardContent>
             </Card>
           </div>

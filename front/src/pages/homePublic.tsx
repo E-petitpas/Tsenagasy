@@ -84,7 +84,7 @@ export default function HomePublic({ currentUser, onLogin, }: HomePublicProps) {
 
       {/* ---------------- HERO + PROMO ---------------- */}
       <main>
-        <PromoBanner isPublicHome={true} onAddToCart={handlePublicAddToCart}/>
+        <PromoBanner isPublicHome={true} onAddToCart={handlePublicAddToCart} onVendorLogin={handleLoginSuccess}/>
 
         {/* ---------------- PRODUITS POPULAIRES ---------------- */}
         <ProductGrid

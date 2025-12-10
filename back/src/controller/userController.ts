@@ -4,6 +4,9 @@ import { Request, Response } from 'express'
 import prisma from '../config/db'
 import * as jwt from 'jsonwebtoken'
 import { supabase } from '../config/supabase'
+import Stripe from "stripe";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secret_key'
 
@@ -56,6 +59,8 @@ export const addClient = async (req: Request, res: Response) => {
     });
 
     let magasin = null;
+    let onboardingUrl: string | null = null;
+
     if (role === "commercant") {
       magasin = await prisma.magasin.create({
         data: {
@@ -65,6 +70,36 @@ export const addClient = async (req: Request, res: Response) => {
           type: type
         },
       });
+
+      // const account = await stripe.accounts.create({
+      //   type: "express",
+      //   country: "MG",
+      //   email: utilisateur.email,
+      //   capabilities: {
+      //     card_payments: { requested: true },
+      //     transfers: { requested: true },
+      //   },
+      //   metadata: {
+      //     magasinId: magasin.id_magasin,
+      //     proprietaireId: utilisateur.id,
+      //   },
+      // });
+
+      // 3) stocker stripeAccountId dans magasin
+      // magasin = await prisma.magasin.update({
+      //   where: { id_magasin: magasin.id_magasin },
+      //   data: { stripeAccountId: account.id },
+      // });
+      
+      // const accountLink = await stripe.accountLinks.create({
+      //   account: account.id,
+      //   type: "account_onboarding",
+      //   return_url: `${process.env.FRONT_URL}/dashboard?onboarding=success`,
+      //   refresh_url: `${process.env.FRONT_URL}/dashboard?onboarding=refresh`,
+      // });
+
+      // onboardingUrl = accountLink.url;
+      
     }
     const idMagasin = magasin?.id_magasin || null;
 
@@ -77,7 +112,8 @@ export const addClient = async (req: Request, res: Response) => {
         nom: utilisateur.nom,
         role: utilisateur.role,
         magasinId: idMagasin,
-      }
+      },
+      onboardingUrl,
     })
   } catch (error) {
     console.error(error);

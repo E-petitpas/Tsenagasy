@@ -130,6 +130,12 @@ export function VendorAuthModal({ isOpen, onClose, onLogin }: VendorModalProps) 
 
       AuthStorage.saveUser(newUser);
       onLogin(newUser);
+
+      // if (data.onboardingUrl) {
+      //   window.location.href = data.onboardingUrl;
+      //   return; // important pour éviter la suite
+      // }
+      
       setFormData({
         name: "",
         email: "",

@@ -19,6 +19,7 @@ export type FactureData = {
   }>;
   frais_livraison: number;
   total: number;
+  statutPaiement: string; // "payé", "en attente", etc.
 };
 
 // ✅ format Ar insécable => pas de coupure
@@ -50,6 +51,7 @@ export async function generateFacturePDF(data: FactureData) {
   const pageWidth =
     doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const x0 = doc.page.margins.left;
+  const isPaid = data.statutPaiement?.toLowerCase() === "payé";
 
   // --- HEADER ---
   doc
@@ -88,7 +90,6 @@ export async function generateFacturePDF(data: FactureData) {
   const tableTop = doc.y;
   const rowH = 22;
 
-  // colonnes en % de page
   const colWidths = {
     article: pageWidth * 0.55,
     qte: pageWidth * 0.12,
@@ -103,7 +104,6 @@ export async function generateFacturePDF(data: FactureData) {
     total: x0 + colWidths.article + colWidths.qte + colWidths.prix,
   };
 
-  // dessin header
   const drawRow = (
     y: number,
     cells: { article: string; qte: string; prix: string; total: string },
@@ -154,12 +154,16 @@ export async function generateFacturePDF(data: FactureData) {
   };
 
   // header row
-  drawRow(tableTop, {
-    article: "Article",
-    qte: "Qté",
-    prix: "Prix U.",
-    total: "Total",
-  }, true);
+  drawRow(
+    tableTop,
+    {
+      article: "Article",
+      qte: "Qté",
+      prix: "Prix U.",
+      total: "Total",
+    },
+    true
+  );
 
   let y = tableTop + rowH;
 
@@ -188,13 +192,31 @@ export async function generateFacturePDF(data: FactureData) {
   doc.moveDown(1.5);
 
   // --- TOTAL ---
+  const labelTotal = isPaid ? "TOTAL PAYÉ" : "TOTAL À PAYER";
+
   doc
     .fontSize(16)
     .font("Helvetica-Bold")
-    .text(`TOTAL À PAYER : ${fmtAr(data.total)} Ar`, x0, doc.y, {
+    .text(`${labelTotal} : ${fmtAr(data.total)} Ar`, x0, doc.y, {
       width: pageWidth,
       align: "right",
     });
+
+  // --- TEXTE BAS DE PAGE SI PAYÉ ---
+  doc.moveDown(2);
+  if (isPaid) {
+    doc
+      .fontSize(10)
+      .font("Helvetica")
+      .fillColor("#000000")
+      .text(
+        "Facture réglée en ligne via Stripe. Aucun autre paiement ne vous sera demandé.",
+        x0,
+        doc.y,
+        { width: pageWidth, align: "left" }
+      )
+      .fillColor("#000000");
+  }
 
   doc.end();
 

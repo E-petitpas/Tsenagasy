@@ -4,6 +4,8 @@ const express = require('express');
 const router = express.Router();
 import { requireAuth } from '../middleware/requireAuth'
 import { upload } from '../middleware/multer';
+import Stripe from "stripe";
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 import * as user from '../controller/userController'
 router.post('/addUser', user.addClient); //ok
@@ -67,5 +69,11 @@ router.get('/admin/orders', order.getAllOrdersAdmin); //ok
 router.put('/orders/:venteId/ship', order.shipOrderAdmin); //ok
 router.get('/vendor/lignes-vente/:magasinId/pending', order.getPendingLinesForVendor); //ok
 router.put('/vendor/ligne-vente/:lineId/check', order.checkLineVendor); //ok
+router.get('/vendor/lignes-vente/:magasinId/recent', order.getRecentLinesForVendor);
+
+import * as payment from '../controller/paymentController'
+router.post("/payments/create-checkout-session", payment.createCheckoutSession); //ok
+router.get("/payments/session-status", payment.sessionStatus); //ok
+router.post("/payments/confirm-order", payment.confirmOrderPayment);
 
 export default router;

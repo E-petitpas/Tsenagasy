@@ -6,8 +6,9 @@ import { VendorAuthModal } from '../components/vendorAuthModal';
 import { ProductDetailModal, ProductDetailData } from "./productDetailModal";
 import { StatusBadge } from "../components/StatusBadge";
 import { API_BASE_URL } from "../config/api";
+import { UserData } from "../config/authStorage";
 
-export function PromoBanner({ isPublicHome = false, onAddToCart, }: { isPublicHome?: boolean, onAddToCart?: (productId: string, qty?: number) => void | Promise<void>; }) {
+export function PromoBanner({ isPublicHome = false, onAddToCart, onVendorLogin }: { isPublicHome?: boolean, onAddToCart?: (productId: string, qty?: number) => void | Promise<void>; onVendorLogin?: (user: UserData) => void; }) {
 
   const [slides, setSlides] = useState<any[]>([]);
   const [productIndex, setProductIndex] = useState(0);
@@ -240,6 +241,9 @@ export function PromoBanner({ isPublicHome = false, onAddToCart, }: { isPublicHo
           onLogin={(user) => {
             console.log("Vendeur connecté depuis PromoBanner", user);
             setIsVendorModalOpen(false);
+            if (onVendorLogin) {
+              onVendorLogin(user);
+            }
           }}
         />
       </div>

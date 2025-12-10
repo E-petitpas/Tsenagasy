@@ -112,6 +112,7 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
     validSponsors: 0
   });
   const [vendorLines, setVendorLines] = useState<any[]>([]);
+  const [recentVendorLines, setRecentVendorLines] = useState<any[]>([]);
 
   const currentView =
     activeView === "vendor" ? "overview" :
@@ -134,6 +135,7 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
     fetchVendorLines();
     if (currentUser?.magasinId) {
       fetchPopularProducts();
+      fetchRecentVendorLines();
     }
   }, []);
   
@@ -579,6 +581,19 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
     }
   };
   
+  const fetchRecentVendorLines = async () => {
+    try {
+      const res = await axios.get(
+        `${API_BASE_URL}/vendor/lignes-vente/${currentUser.magasinId}/recent`
+      );
+
+      setRecentVendorLines(res.data || []);
+    } catch (err) {
+      console.error("Erreur lignes récentes vendeur:", err);
+      toast.error("Impossible de charger les dernières commandes");
+    }
+  };
+  
   const handleCheckLine = async (lineId: string) => {
     const confirm = await Swal.fire({
       title: "Confirmer le dépôt ?",
@@ -765,19 +780,52 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {mockOrders.slice(0, 3).map((order) => (
-                      <div key={order.id} onClick={() => {
-                        onChangeView("vendor-orders")
-                      }}
-                        className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white border border-gray-100 rounded-lg hover:shadow-md transition-shadow">
-                        <div>
-                          <p className="font-medium text-gray-900">{order.id}</p>
-                          <p className="text-sm text-gray-600">{order.customer}</p>
-                          <p className="text-sm text-[#2D8A47] font-bold">{formatPrice(order.total)}</p>
+                    {recentVendorLines.length === 0 ? (
+                      <p className="text-gray-500 text-sm italic">
+                        Aucune commande récente pour le moment.
+                      </p>
+                    ) : (
+                      recentVendorLines.map((line) => (
+                        <div
+                          key={line.id}
+                          onClick={() => {
+                            onChangeView("vendor-orders");
+                          }}
+                          className="flex items-center justify-between px-4 py-2 bg-gradient-to-r from-gray-50 to-white border border-gray-100 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
+                        >
+                          <div>
+                            {/* Id commande (tronqué) */}
+                            <p className="font-medium text-sm text-gray-900">
+                              {line.vente?.id ? `CMD-${line.vente.id.slice(0, 8)}` : "Commande"}
+                            </p>
+
+                            {/* Client */}
+                            <p className="text-xs text-gray-600">
+                              {line.vente?.user?.nom || "Client inconnu"}
+                            </p>
+
+                            {/* Total ligne */}
+                            <p className="text-xs text-[#2D8A47] font-bold">
+                              {formatPrice(Number(line.total))}
+                            </p>
+
+                            {/* Date */}
+                            {line.vente?.dateVente && (
+                              <p className="text-[11px] text-gray-400">
+                                {new Date(line.vente.dateVente).toLocaleDateString("fr-FR")}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Statut de la vente */}
+                          {line.vente?.statut && (
+                            <div className="scale-90">
+                              <StatusBadge status={line.vente.statut} />
+                            </div>
+                          )}
                         </div>
-                        {<StatusBadge status={order.status} />}
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </CardContent>
           </Card>

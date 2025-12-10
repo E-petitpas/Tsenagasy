@@ -133,6 +133,7 @@ export default function App() {
                 : <Navigate to="/" replace />
             }
           />
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

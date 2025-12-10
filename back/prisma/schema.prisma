@@ -38,14 +38,17 @@ model Utilisateur {
 // MAGASIN
 // ==========================
 model Magasin {
-  id_magasin      String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id_magasin      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nom_Magasin     String
   type            String
-  id_proprietaire String       @db.Uuid
-  statut          String       @default("en-attente")
-  proprietaire    Utilisateur  @relation(fields: [id_proprietaire], references: [id])
-  produits        Produit[]
-  LigneVente      LigneVente[]
+  id_proprietaire String @db.Uuid
+  statut          String @default("en-attente")
+
+  stripeAccountId String? @unique
+
+  proprietaire Utilisateur  @relation(fields: [id_proprietaire], references: [id])
+  produits     Produit[]
+  LigneVente   LigneVente[]
 
   @@map("magasins")
 }

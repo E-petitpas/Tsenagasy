@@ -227,3 +227,51 @@ export const checkLineVendor = async (req: Request, res: Response) => {
     });
   }
 };
+
+// 3 dernières lignes de vente pour un vendeur (par magasin)
+export const getRecentLinesForVendor = async (req: Request, res: Response) => {
+  try {
+    const { magasinId } = req.params;
+
+    const lignes = await prisma.ligneVente.findMany({
+      where: {
+        magasinId,           
+      },
+      orderBy: {
+        vente: { dateVente: "desc" },
+      },
+      take: 3,              
+      include: {
+        produit: {
+          select: {
+            id: true,
+            nom: true,
+            images: true,
+          },
+        },
+        vente: {
+          select: {
+            id: true,
+            dateVente: true,
+            statut: true,
+            user: {
+              select: {
+                nom: true,
+                tel: true,
+                adresse: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return res.json(lignes);
+  } catch (e: any) {
+    console.error(e);
+    return res.status(500).json({
+      error: "Erreur getRecentLinesForVendor",
+      detail: e?.message,
+    });
+  }
+};
