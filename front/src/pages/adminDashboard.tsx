@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Package, Star, BarChart3, Settings, LogOut, Plus, Search, Edit, Trash2, Eye, CheckCircle, XCircle, TrendingUp, ClipboardList } from 'lucide-react';
+import { Users, Package, Star, BarChart3, X, Settings, LogOut, Plus, Search, Edit, Trash2, Eye, CheckCircle, XCircle, TrendingUp, ClipboardList } from 'lucide-react';
 import AddUserModal from '../components/addUserModal';
 import { UserData } from '../config/authStorage';
 import { API_BASE_URL } from '../config/api';
@@ -43,6 +43,7 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
   });
 
   const [orders, setOrders] = useState<any[]>([]);
+  const [orderViewMode, setOrderViewMode] = useState<"current" | "history">("current");
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentDate(new Date()), 1000);
@@ -527,6 +528,74 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
   const logisticsCount = orders.filter(
     (o) => o.statut !== "expedie" && o.statut !== "expédié"
   ).length;
+
+  //suppression facture
+  const handleAdminDeleteOrder = async (orderId: string, factureNumero?: string | null) => {
+    await Swal.fire({
+      title: "Supprimer définitivement ?",
+      text: factureNumero
+        ? `Supprimer la commande liée à la facture "${factureNumero}" ?`
+        : "Supprimer définitivement cette commande ?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Supprimer",
+      cancelButtonText: "Annuler",
+      showLoaderOnConfirm: true,
+      allowOutsideClick: () => !Swal.isLoading(),
+      preConfirm: async () => {
+        try {
+          await axios.delete(`${API_BASE_URL}/orders/${orderId}`);
+          return true;
+        } catch (err: any) {
+          Swal.showValidationMessage(
+            err?.response?.data?.error || "Erreur lors de la suppression."
+          );
+          return false;
+        }
+      },
+    }).then((result) => {
+      if (result.isConfirmed) {
+        toast.success("Commande supprimée !");
+        fetchAdminOrders(); 
+      }
+    });
+  };
+
+  // download facture
+  const downloadFacture = async (url?: string | null, factureNumero?: string | null) => {
+    if (!url) {
+      toast.error("Facture indisponible.");
+      return;
+    }
+
+    try {
+      const SERVER_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, "");
+
+      const isAbsolute = /^https?:\/\//i.test(url);
+      const clean = url.replace(/^\/+/, "");
+      const fullUrl = isAbsolute ? url : `${SERVER_BASE_URL}/${clean}`;
+
+      const res = await fetch(fullUrl);
+      if (!res.ok) throw new Error("Fetch PDF failed");
+
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `${factureNumero ?? "facture"}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      console.error(e);
+      toast.error("Impossible de télécharger la facture.");
+    }
+  };
   
   const renderContent = () => {
     
@@ -1262,118 +1331,291 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
           (a, b) => new Date(b.dateVente).getTime() - new Date(a.dateVente).getTime()
         );
 
-        const visibleOrders = sortedOrders.filter(
-          (o) => o.statut !== "expedie" && o.statut !== "expédié"
+        const historyOrders = sortedOrders.filter(
+          (o) => o.statut.toLowerCase() === "expedie"
         );
 
+        const currentOrders = sortedOrders.filter(
+          (o) => o.statut.toLowerCase() !== "expedie"
+        );
+
+        const visibleOrders =
+          orderViewMode === "current" ? currentOrders : historyOrders;
+
+        const renderCurrentOrder = (o: any) => {
+          const totalLines = o.lignes?.length || 0;
+          const okLines = o.lignes?.filter((l: any) => l.depotOk).length || 0;
+          const allOk = totalLines > 0 && okLines === totalLines;
+
+          return (
+            <div
+              key={o.id}
+              className="relative bg-white rounded-xl shadow p-4 space-y-3 border-2"
+              style={{ borderColor: "#8B5CF6" }}
+            >
+              {/* HEADER FACTURE */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-lg">
+                    Facture #{o.facture_numero || "—"}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Commandé le {new Date(o.dateVente).toLocaleDateString("fr-FR")}
+                  </p>
+                </div>
+                <StatusBadge status={o.statut} />
+              </div>
+
+              {/* CLIENT */}
+              <div className="text-sm">
+                <p className="font-medium">{o.user.nom} — {o.user.email}</p>
+                <p className="text-gray-500">{o.user.tel}</p>
+                <p className="text-gray-500">{o.livraison?.adresse_livraison || "—"}</p>
+              </div>
+
+              {/* CHECKLIST */}
+              <div className="flex items-center justify-between bg-gray-50 p-2 rounded text-sm">
+                <span>Articles déposés</span>
+                <span className={`font-semibold ${allOk ? "text-green-600" : "text-orange-600"}`}>
+                  {okLines}/{totalLines}
+                </span>
+              </div>
+
+              {/* LIGNES */}
+              <div className="border-t pt-3 space-y-2">
+                <p className="font-semibold text-sm">Articles :</p>
+
+                {o.lignes.map((l: any) => (
+                  <div
+                    key={l.id}
+                    className="flex items-center justify-between text-sm bg-gray-50 p-2 rounded"
+                  >
+                    <div>
+                      <p className="font-medium">{l.produit.nom}</p>
+                      <p className="text-gray-500">
+                        Magasin : {l.magasin.nom_Magasin} • Qté : {l.quantite}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        l.depotOk
+                          ? "bg-green-100 text-green-700"
+                          : "bg-yellow-100 text-yellow-700"
+                      }`}
+                    >
+                      {l.depotOk ? "Déposé" : "En attente"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* FOOTER : EXPÉDIER */}
+              <button
+                onClick={() => handleShipOrder(o.id, o.facture_numero)}
+                disabled={!allOk}
+                className={`w-full py-2 rounded-lg font-medium transition ${
+                  allOk ? "cursor-pointer" : "cursor-not-allowed"
+                }`}
+                style={{
+                  backgroundColor: "#8B5CF6",
+                  opacity: allOk ? 1 : 0.65,
+                  color: "#fff",
+                }}
+              >
+                Expédier
+              </button>
+            </div>
+          );
+        };
+
+        const renderHistoryOrder = (o: any) => {
+          const dateLivraison = o.livraison?.date_effective
+            ? new Date(o.livraison.date_effective).toLocaleDateString("fr-FR")
+            : "—";
+
+          return (
+            <div
+              key={o.id}
+              style={{
+                border: "2px solid #E5D8FF",
+                borderRadius: "12px",
+                background: "white",
+                padding: "14px",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+                transition: "0.2s",
+              }}
+              className="hover:shadow-lg"
+            >
+              {/* HEADER */}
+              <div
+                style={{
+                  background: "#F3F0FF",
+                  padding: "10px 12px",
+                  borderRadius: "8px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "10px",
+                }}
+              >
+                <div>
+                  <p style={{ fontSize: "15px", fontWeight: 600, color: "#4B3BA8" }}>
+                    Facture #{o.facture_numero}
+                  </p>
+                  <p style={{ fontSize: "12px", color: "#7C7A8A" }}>
+                    Commandée le {new Date(o.dateVente).toLocaleDateString("fr-FR")}
+                  </p>
+                </div>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAdminDeleteOrder(o.id, o.facture_numero);
+                  }}
+                  style={{
+                    width: "22px",
+                    height: "22px",
+                    background: "#FFE5E5",
+                    border: "1px solid #FFB3B3",
+                    color: "#de2c2cff",
+                    borderRadius: "50%",
+                    fontSize: "16px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+
+              {/* INFOS */}
+              <div style={{ fontSize: "13px", lineHeight: "1.4" }}>
+                <p>
+                  <strong style={{ color: "#444" }}>Client :</strong> {o.user.nom} —{" "}
+                  {o.user.tel}
+                </p>
+
+                <p style={{ marginTop: "6px" }}>
+                  <strong style={{ color: "#444" }}>Adresse :</strong>
+                </p>
+                <p
+                  style={{
+                    whiteSpace: "pre-line",
+                    marginTop: "2px",
+                    color: "#555",
+                    fontSize: "13px",
+                  }}
+                >
+                  {o.livraison?.adresse_livraison}
+                </p>
+
+                <p style={{ marginTop: "6px" }}>
+                  <strong style={{ color: "#444" }}>Mode :</strong>{" "}
+                  {o.livraison?.mode || "—"}
+                </p>
+
+                <p style={{ marginTop: "6px" }}>
+                  <strong style={{ color: "#444" }}>Livré le :</strong>{" "}
+                  {dateLivraison}
+                </p>
+
+                <p style={{ marginTop: "6px" }}>
+                  <strong style={{ color: "#444" }}>Total :</strong>{" "}
+                  <span style={{ fontWeight: 600 }}>
+                    {Number(o.total).toLocaleString("fr-FR")} Ar
+                  </span>
+                </p>
+              </div>
+
+              {/* BOUTON PDF */}
+              {o.facture_url && (
+                <button
+                  onClick={() => downloadFacture(o.facture_url, o.facture_numero)}
+                  style={{
+                    marginTop: "12px",
+                    width: "100%",
+                    padding: "6px 0",
+                    background: "#6B5CF6",
+                    color: "white",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                  }}
+                >
+                  Télécharger PDF
+                </button>
+              )}
+            </div>
+          );
+        };
+
+        // -------------------------------------------------------------
+        // 🔥 RENDER FINAL
+        // -------------------------------------------------------------
         return (
           <div className="space-y-6">
             <div className="section-card">
-              <h3 className="text-xl font-bold mb-4">Logistique / Commandes</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xl font-bold mb-4">Logistique / Commandes</h3>
 
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setOrderViewMode("current")}
+                    className={`px-4 py-2 rounded-lg font-medium text-sm ${
+                      orderViewMode === "current"
+                        ? "text-white"
+                        : "bg-gray-200 text-gray-700"
+                    }`}
+                    style={
+                      orderViewMode === "current" ? { backgroundColor: "#8B5CF6" } : {}
+                    }
+                  >
+                    En cours
+                  </button>
+
+                  <button
+                    onClick={() => setOrderViewMode("history")}
+                    className={`px-4 py-2 rounded-lg font-medium text-sm ${
+                      orderViewMode === "history"
+                        ? "text-white"
+                        : "bg-gray-200 text-gray-700"
+                    }`}
+                    style={
+                      orderViewMode === "history"
+                        ? { backgroundColor: "#6B7280" }
+                        : {}
+                    }
+                  >
+                    Historique
+                  </button>
+                </div>
+              </div>
+
+              {/* Si aucune commande */}
               {visibleOrders.length === 0 ? (
                 <p className="text-center text-gray-600">Aucune commande.</p>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {visibleOrders.map((o) => {
-                    const totalLines = o.lignes?.length || 0;
-                    const okLines = o.lignes?.filter((l: any) => l.depotOk).length || 0;
-                    const allOk = totalLines > 0 && okLines === totalLines;
-
-                    return (
-                      <div
-                        key={o.id}
-                        className="bg-white rounded-xl shadow p-4 space-y-3 border-2"
-                        style={{ borderColor: "#8B5CF6" }}
-                      >
-                        {/* HEADER FACTURE */}
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-bold text-lg">
-                              Facture #{o.facture_numero || "—"}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {new Date(o.dateVente).toLocaleDateString("fr-FR")}
-                            </p>
-                          </div>
-                          <StatusBadge status={o.statut} />
-                        </div>
-
-                        {/* CLIENT */}
-                        <div className="text-sm">
-                          <p className="font-medium">
-                            {o.user?.nom} — {o.user?.email}
-                          </p>
-                          <p className="text-gray-500">{o.user?.tel}</p>
-                          <p className="text-gray-500">{o.user?.adresse}</p>
-                        </div>
-
-                        {/* CHECKLIST RESUMÉ */}
-                        <div className="flex items-center justify-between bg-gray-50 p-2 rounded text-sm">
-                          <span>Articles déposés</span>
-                          <span className={`font-semibold ${allOk ? "text-green-600" : "text-orange-600"}`}>
-                            {okLines}/{totalLines}
-                          </span>
-                        </div>
-
-                        {/* LIGNES */}
-                        <div className="border-t pt-3 space-y-2">
-                          <p className="font-semibold text-sm">Détails</p>
-
-                          <div className="space-y-1">
-                            {o.lignes.map((l: any) => (
-                              <div
-                                key={l.id}
-                                className="flex items-center justify-between text-sm bg-gray-50 p-2 rounded"
-                              >
-                                <div>
-                                  <p className="font-medium">{l.produit?.nom}</p>
-                                  <p className="text-gray-500">
-                                    Magasin: {l.magasin?.nom_Magasin} • Qté: {l.quantite}
-                                  </p>
-                                </div>
-
-                                {/* petit état visuel */}
-                                <span
-                                  className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                    l.depotOk
-                                      ? "bg-green-100 text-green-700"
-                                      : "bg-yellow-100 text-yellow-700"
-                                  }`}
-                                >
-                                  {l.depotOk ? "Déposé" : "En attente"}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* FOOTER BOUTON (désactivé et sans action pour l’instant) */}
-                        <div className="pt-2">
-                          <button
-                            onClick={() => handleShipOrder(o.id, o.facture_numero)}
-                            disabled={!allOk}
-                            className={`w-full py-2 rounded-lg font-medium transition ${
-                              allOk ? "cursor-pointer" : "cursor-not-allowed"
-                            }`}
-                            style={{
-                              backgroundColor: "#8B5CF6",
-                              opacity: allOk ? 1 : 0.65,
-                              color: "#fff"
-                            }}
-                          >
-                            Expédier
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="grid gap-6"
+                  style={{
+                    gridTemplateColumns:
+                      orderViewMode === "history"
+                        ? "repeat(auto-fill, minmax(280px, 1fr))" // 🔥 3 par ligne automatiquement
+                        : "repeat(auto-fill, minmax(350px, 1fr))",
+                  }}>
+                  {visibleOrders.map((o) =>
+                    orderViewMode === "current"
+                      ? renderCurrentOrder(o)
+                      : renderHistoryOrder(o)
+                  )}
                 </div>
               )}
             </div>
           </div>
         );
       }
+
 
       default:
         return null;

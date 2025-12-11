@@ -35,18 +35,13 @@ export const createSponsor = async (req: Request, res: Response) => {
       });
     }
 
-    // Calculer la date de fin (+1 mois)
-    const dateDebut = new Date();
-    const dateFin = new Date(dateDebut);
-    dateFin.setMonth(dateFin.getMonth() + 1);
-
     // Création du sponsor
     const sponsor = await prisma.sponsor.create({
       data: {
         produitId,
         statut: "en_attente", // correspond au défaut dans ton modèle
-        dateDebut,
-        dateFin,
+        dateDebut: null,
+        dateFin: null,
       },
       include: {
         produit: {
@@ -105,6 +100,9 @@ export const getSponsorsByVendor = async (req: Request, res: Response) => {
       },
       include: {
         produit: true
+      },
+      orderBy: {
+        dateDebut: "asc"
       }
     });
 
@@ -136,8 +134,6 @@ export const resendSponsor = async (req: Request, res: Response) => {
       where: { id },
       data: {
         statut: "en_attente",
-        dateDebut: new Date(),
-        dateFin: new Date(new Date().setMonth(new Date().getMonth() + 1)),
       },
     });
 
@@ -256,32 +252,39 @@ export const updateSponsorStatusAdmin = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Statut invalide." });
     }
 
-    const sponsor = await prisma.sponsor.findUnique({
-      where: { id }
-    });
-
+    const sponsor = await prisma.sponsor.findUnique({ where: { id } });
     if (!sponsor) {
       return res.status(404).json({ error: "Sponsor introuvable." });
     }
 
-    // Mise à jour
+    // Choix des dates en fonction du statut
+    let dataUpdate: any = { statut };
+
+    if (statut === "validé") {
+      const now = new Date();
+      dataUpdate.dateDebut = now;
+      dataUpdate.dateFin = new Date(now);
+      dataUpdate.dateFin.setMonth(now.getMonth() + 1);
+    } else {
+      // refusé ou en_attente => pas de dates
+      dataUpdate.dateDebut = null;
+      dataUpdate.dateFin = null;
+    }
+
     const updated = await prisma.sponsor.update({
       where: { id },
-      data: { statut },
+      data: dataUpdate,
       include: {
         produit: {
           include: {
             produitLocation: true,
-            magasin: {
-              include: {
-                proprietaire: true
-              }
-            }
-          }
-        }
-      }
+            magasin: { include: { proprietaire: true } },
+          },
+        },
+      },
     });
 
+    // On garde EXACTEMENT la même structure que ton code d’origine
     const mapped = {
       id: updated.id,
       statut: updated.statut,
@@ -295,12 +298,12 @@ export const updateSponsorStatusAdmin = async (req: Request, res: Response) => {
       magasin: updated.produit?.magasin?.nom_Magasin,
       proprietaireEmail: updated.produit?.magasin?.proprietaire?.email,
 
-      produit: updated.produit
+      produit: updated.produit,
     };
 
     return res.status(200).json({
       message: "Statut sponsor mis à jour !",
-      sponsor: mapped
+      sponsor: mapped,
     });
 
   } catch (err) {
@@ -308,3 +311,4 @@ export const updateSponsorStatusAdmin = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Erreur serveur." });
   }
 };
+

@@ -142,9 +142,31 @@ export const getUserProfile = async (req: Request, res: Response) => {
   }
 };
 
+// désactivation intelligente des sponsors expiré
+async function disableExpiredSponsors() {
+  try {
+    const now = new Date();
+
+    await prisma.sponsor.updateMany({
+      where: {
+        statut: "validé",
+        dateFin: { lt: now }
+      },
+      data: { statut: "refusé" }
+    });
+
+    console.log("Sponsors expirés désactivés automatiquement");
+
+  } catch (error) {
+    console.error("Erreur disableExpiredSponsors:", error);
+  }
+}
+
 // pour les sponsors dans la bannière
 export const getAllSponsoredProducts = async (req: Request, res: Response) => {
   try {
+
+    disableExpiredSponsors();
     const now = new Date();
 
     const sponsors = await prisma.sponsor.findMany({

@@ -115,12 +115,12 @@ model ProduitLocation {
 }
 
 model Sponsor {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  statut    String   @default("en_attente") // en_attente | validé | refusé
-  dateDebut DateTime @default(now())
-  dateFin   DateTime
-  produitId String   @unique @db.Uuid
-  produit   Produit  @relation("ProduitSponsor", fields: [produitId], references: [id], onDelete: Cascade)
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  statut    String    @default("en_attente") // en_attente | validé | refusé
+  dateDebut DateTime?
+  dateFin   DateTime?
+  produitId String    @unique @db.Uuid
+  produit   Produit   @relation("ProduitSponsor", fields: [produitId], references: [id], onDelete: Cascade)
 
   @@map("sponsors")
 }
@@ -188,6 +188,8 @@ model Vente {
   facture_numero String? @unique
   facture_url    String?
 
+  archivedByClient Boolean @default(false)
+
   idUser String      @db.Uuid
   user   Utilisateur @relation(fields: [idUser], references: [id])
   panier Panier      @relation(fields: [idPanier], references: [id])
@@ -211,8 +213,9 @@ model LigneVente {
   prix_Unitaire Decimal @db.Decimal(12, 2)
   total         Decimal @db.Decimal(12, 2)
 
-  depotOk Boolean   @default(false) // admin a reçu ces articles
-  depotAt DateTime?
+  depotOk          Boolean   @default(false) // admin a reçu ces articles
+  depotAt          DateTime?
+  archivedByVendor Boolean   @default(false)
 
   vente   Vente   @relation(fields: [venteId], references: [id], onDelete: Cascade)
   produit Produit @relation(fields: [produitId], references: [id])

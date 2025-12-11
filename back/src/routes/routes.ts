@@ -64,6 +64,9 @@ import * as commande from '../controller/orderController'
 router.post('/add/order', commande.createOrder); //ok
 router.get('/orders/:userId', commande.getMyOrders); //ok
 router.delete('/orders/:orderId', commande.deleteOrder); //ok
+router.put('/orders/hide/:orderId', commande.hideOrderFromClient); //ok
+router.put('/vendor/ligne-vente/:lineId/hide', commande.hideLineForVendor); //ok
+router.get('/vendor/lignes-vente/:magasinId/delivered', commande.getDeliveredLinesForVendor); //ok
 
 import * as order from '../controller/adminOrder'
 router.get('/admin/orders', order.getAllOrdersAdmin); //ok

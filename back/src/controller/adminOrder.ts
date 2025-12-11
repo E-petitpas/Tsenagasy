@@ -51,10 +51,10 @@ export const getAllOrdersAdmin = async (req: Request, res: Response) => {
 
 // update statut vente en expédiée
 export const shipOrderAdmin = async (req: Request, res: Response) => {
-    try {
+  try {
     const { venteId } = req.params;
 
-    // vérifier que la vente existe + récupérer lignes
+    // vérifier que la vente existe + récupérer lignes + livraison
     const vente = await prisma.vente.findUnique({
       where: { id: venteId },
       include: { lignes: true, livraison: true }
@@ -64,27 +64,26 @@ export const shipOrderAdmin = async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Vente introuvable" });
     }
 
-    // 2) vérifier que toutes les lignes sont déposées
+    // vérifier que toutes les lignes sont déposées
     const allOk = vente.lignes.length > 0 && vente.lignes.every(l => l.depotOk);
+
     if (!allOk) {
       return res.status(400).json({
         error: "Impossible d'expédier : tous les articles ne sont pas déposés"
       });
     }
 
-    // 3) update vente + livraison
+    // update vente + livraison
     const updated = await prisma.vente.update({
       where: { id: venteId },
       data: {
-        statut: "expedie", // même valeur que ton filtre
-        livraison: vente.livraison
-          ? {
-              update: {
-                statut: "expedie",
-                date_effective: new Date()
-              }
-            }
-          : undefined
+        statut: "expedie",
+        livraison: {
+          update: {
+            statut: "livré",
+            date_effective: new Date()
+          }
+        }
       },
       include: { livraison: true }
     });
@@ -107,7 +106,8 @@ export const getPendingLinesForVendor = async (req: Request, res: Response) => {
     const lignes = await prisma.ligneVente.findMany({
       where: {
         magasinId,
-        depotOk: false, // seulement non cochées
+        depotOk: false, 
+        archivedByVendor: false
       },
       orderBy: {
         vente: { dateVente: "asc" }, // tri par date de vente (via relation)

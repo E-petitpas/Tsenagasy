@@ -46,46 +46,8 @@ interface VendorDashboardProps {
   ) => void;
 }
 
-const mockStats = {
-  totalRevenue: 1250000,
-  totalOrders: 89,
-  activeProducts: 23,
-  newCustomers: 45
-};
-
-const mockOrders = [
-  {
-    id: 'ORD001',
-    customer: 'Hery Rakoto',
-    products: ['Tissu Lamba traditionnel'],
-    total: 45000,
-    status: 'completed',
-    date: '2024-01-15',
-    payment: 'mvola'
-  },
-  {
-    id: 'ORD002',
-    customer: 'Fara Andry',
-    products: ['Panier artisanal', 'Épices mélangées'],
-    total: 37000,
-    status: 'processing',
-    date: '2024-01-14',
-    payment: 'orange_money'
-  },
-  {
-    id: 'ORD003',
-    customer: 'Rivo Hery',
-    products: ['Épices mélangées traditionnelles'],
-    total: 12000,
-    status: 'shipped',
-    date: '2024-01-13',
-    payment: 'card'
-  }
-];
-
 export default function VendorDashboard({ currentUser, activeView, onChangeView }: VendorDashboardProps){
   const [searchTerm, setSearchTerm] = useState('');
-  const [orders, setOrders] = useState(mockOrders);
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
   const [isModifyProductModalOpen, setModifyProductModalOpen] = useState(false);
   const [isNewLocationModalOpen, setIsNewLocationModalOpen] = useState(false);
@@ -113,6 +75,8 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
   });
   const [vendorLines, setVendorLines] = useState<any[]>([]);
   const [recentVendorLines, setRecentVendorLines] = useState<any[]>([]);
+  const [lineViewMode, setLineViewMode] = useState<"pending" | "delivered">("pending");
+  const [deliveredVendorLines, setDeliveredVendorLines] = useState<any[]>([]);
 
   const currentView =
     activeView === "vendor" ? "overview" :
@@ -133,6 +97,7 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
     fetchSponsors();
     fetchStats();
     fetchVendorLines();
+    fetchDeliveredVendorLines();
     if (currentUser?.magasinId) {
       fetchPopularProducts();
       fetchRecentVendorLines();
@@ -233,6 +198,15 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
     }
   };
 
+  const fetchDeliveredVendorLines = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/vendor/lignes-vente/${currentUser.magasinId}/delivered`);
+      setDeliveredVendorLines(res.data || []);
+    } catch {
+      toast.error("Impossible de charger les articles déposés");
+    }
+  };
+  
   const handleNewProduct = async (newProduct: any) => {
     await fetchProducts();
     setIsNewProductModalOpen(false);
@@ -640,6 +614,41 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
   }
 };
   
+  const hideLine = async (lineId: string) => {
+    const confirm = await Swal.fire({
+      title: "Supprimer définitivement ?",
+      text: "Cette commande sera définitivement supprimée de votre tableau.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Oui, supprimer",
+      cancelButtonText: "Annuler",
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      showLoaderOnConfirm: true,
+
+      preConfirm: async () => {
+        try {
+          await axios.put(`${API_BASE_URL}/vendor/ligne-vente/${lineId}/hide`);
+          return true;
+        } catch (err: any) {
+          Swal.showValidationMessage(
+            err?.response?.data?.error || "Une erreur est survenue."
+          );
+          return false;
+        }
+      }
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    setVendorLines(prev => prev.filter(l => l.id !== lineId));
+    setDeliveredVendorLines(prev => prev.filter(l => l.id !== lineId));
+
+    toast.success("Commande supprimée !");
+  };
+
   // contenu de vue d'ensemble
   const renderOverview = () => {
     return (
@@ -1109,39 +1118,74 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
                       <StatusBadge status={s.produit.isLocation ? "location" : "vente"} />
                     </TableCell>
                     <TableCell>
-                      {new Date(s.dateDebut).toLocaleDateString("fr-FR")}
+                      {s.dateDebut ? new Date(s.dateDebut).toLocaleDateString("fr-FR") : "—"}
                     </TableCell>
                     <TableCell>
-                      {new Date(s.dateFin).toLocaleDateString("fr-FR")}
+                      {s.dateFin ? new Date(s.dateFin).toLocaleDateString("fr-FR") : "—"}
                     </TableCell>
                     <TableCell>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => handleViewProduct(s.produit.id)}
+                      <div 
+                        className="flex items-center justify-center gap-2"
+                        style={{ display: "flex", justifyContent: "center" }}
                       >
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                        {/* Voir produit */}
+                        <button
+                          onClick={() => handleViewProduct(s.produit.id)}
+                          title="Voir le produit"
+                          style={{
+                            backgroundColor: "#2563EB",
+                            color: "white",
+                            borderRadius: "6px",
+                            padding: "6px 10px",
+                            display: "flex",
+                            alignItems: "center",
+                            border: "none",
+                            cursor: "pointer"
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+
+                        {/* Relancer si refusé */}
                         {s.statut === "refusé" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-yellow-600 hover:text-yellow-700"
+                          <button
                             onClick={() => handleResponsor(s.id)}
+                            title="Relancer la demande"
+                            style={{
+                              backgroundColor: "#FACC15",
+                              color: "black",
+                              borderRadius: "6px",
+                              padding: "6px 10px",
+                              display: "flex",
+                              alignItems: "center",
+                              border: "none",
+                              cursor: "pointer"
+                            }}
                           >
                             <RefreshCw className="h-4 w-4" />
-                          </Button>
+                          </button>
                         )}
 
-                        {/* Supprimer sponsoring */}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-500 hover:text-red-700"
-                          onClick={() => handleDeleteSponsor(s.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>                            
+                        {/* Supprimer si refusé */}
+                        {s.statut === "refusé" && (
+                          <button
+                            onClick={() => handleDeleteSponsor(s.id)}
+                            title="Supprimer le sponsoring"
+                            style={{
+                              backgroundColor: "#DC2626",
+                              color: "white",
+                              borderRadius: "6px",
+                              padding: "6px 10px",
+                              display: "flex",
+                              alignItems: "center",
+                              border: "none",
+                              cursor: "pointer"
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1153,12 +1197,42 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
     );
   };
 
+  const visibleLines = lineViewMode === "pending" ? vendorLines : deliveredVendorLines;
   // contenu de commandes
  const renderOrders = () => {
   return (
     <div className="section-card">
-      <h3 className="text-xl font-bold mb-6">Articles commandés</h3>
 
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-xl font-bold">Articles commandés</h3>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setLineViewMode("pending")}
+            className={`px-3 py-1 rounded-md text-sm font-medium border transition ${
+              lineViewMode === "pending"
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+            }`}
+          >
+            En attente
+          </button>
+
+          <button
+            onClick={() => setLineViewMode("delivered")}
+            className={`px-3 py-1 rounded-md text-sm font-medium border transition ${
+              lineViewMode === "delivered"
+                ? "bg-green-600 text-white border-green-600"
+                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+            }`}
+          >
+            Déposé
+          </button>
+
+        </div>
+      </div>
+
+      {/* TABLEAU */}
       <div className="overflow-x-auto bg-white rounded-lg shadow">
         <Table className="w-full table-auto">
           <TableHeader>
@@ -1167,21 +1241,21 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
               <TableHead>Produit</TableHead>
               <TableHead>Qté</TableHead>
               <TableHead>PU</TableHead>
-              <TableHead>Total ligne</TableHead>
-              <TableHead>Date vente</TableHead>
+              <TableHead>Total</TableHead>
+              <TableHead>Date</TableHead>
               <TableHead className="text-center">Action</TableHead>
             </TableRow>
           </TableHeader>
 
           <TableBody>
-            {vendorLines.length === 0 ? (
+            {visibleLines.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-gray-500 py-6">
-                  Aucun article en attente 🎉
+                  Aucun article répertorié.
                 </TableCell>
               </TableRow>
             ) : (
-              vendorLines.map((l) => (
+              visibleLines.map((l) => (
                 <TableRow key={l.id}>
                   {/* CLIENT */}
                   <TableCell>
@@ -1203,39 +1277,49 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
                     </div>
                   </TableCell>
 
-                  {/* QTE */}
                   <TableCell>{l.quantite}</TableCell>
+                  <TableCell className="font-semibold text-[#FF9800]">
+                    {formatPrice(Number(l.prix_Unitaire))}
+                  </TableCell>
 
-                  {/* PU */}
-                  <TableCell className="font-semibold text-[#FF9800]">{formatPrice(Number(l.prix_Unitaire))}</TableCell>
-
-                  {/* TOTAL */}
                   <TableCell className="font-bold text-[#2D8A47]">
                     {formatPrice(Number(l.total))}
                   </TableCell>
 
-                  {/* DATE VENTE */}
                   <TableCell>
                     {new Date(l.vente.dateVente).toLocaleDateString("fr-FR")}
                   </TableCell>
 
                   {/* ACTION */}
-                  <TableCell className="text-center">
-                    <Button
-                      size="sm"
-                      title="Marquer comme déposé"
-                      onClick={() => handleCheckLine(l.id)}
-                      className="
-                        bg-[#2D8A47] text-white 
-                        hover:bg-[#245A35]
-                        active:bg-[#1F4A2C]
-                        px-3 py-2 rounded-full
-                        shadow-sm
-                        transition-colors
-                      "
-                    >
-                      <CheckCircle className="h-5 w-5 text-white" />
-                    </Button>
+                  <TableCell className="text-center space-x-2">
+                    <div className="flex justify-center">
+                      {/* ➤ Bouton dépôt — montré UNIQUEMENT dans "En attente" */}
+                      {lineViewMode === "pending" && (
+                        <Button
+                          size="sm"
+                          title="Marquer comme déposé"
+                          onClick={() => handleCheckLine(l.id)}
+                          className="
+                            bg-[#2D8A47] text-white 
+                            hover:bg-[#245A35]
+                            px-3 py-2 rounded-full
+                          "
+                        >
+                          <CheckCircle className="h-5 w-5 text-white" />
+                        </Button>
+                      )}
+
+                      {/* ➤ Bouton suppression — montré UNIQUEMENT dans "Déposé" */}
+                      {lineViewMode === "delivered" && (
+                        <Button
+                          size="sm"
+                          onClick={() => hideLine(l.id)}
+                          className="bg-red-600 text-white hover:bg-red-700 px-3 py-1.5 rounded-full flex items-center gap-1"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -1246,6 +1330,7 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
     </div>
   );
 };
+
 
   // contenu d'analyse
   const renderAnalytics = () => {

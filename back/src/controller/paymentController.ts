@@ -150,7 +150,7 @@ export const confirmOrderPayment = async (req: Request, res: Response) => {
         nom: venteFull.user.nom,
         email: venteFull.user.email,
         tel: venteFull.user.tel,
-        adresse: venteFull.user.adresse,
+        adresse: venteFull.livraison?.adresse_livraison || "Adresse non fournie",
       },
       lignes: venteFull.lignes.map((l) => ({
         nom: l.produit.nom,

@@ -95,6 +95,8 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
   const [storeName, setStoreName] = useState(profileUser?.storeName ?? "");
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [orderViewMode, setOrderViewMode] = useState<"prep" | "delivered">("prep");
+
   
   useEffect(() => {
     setName(profileUser?.name ?? "");
@@ -360,7 +362,7 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
       allowOutsideClick: () => !Swal.isLoading(),
       preConfirm: async () => {
         try {
-          await axios.delete(`${API_BASE_URL}/orders/${orderId}`);
+          await axios.put(`${API_BASE_URL}/orders/hide/${orderId}`);
           return true;
         } catch (err: any) {
           console.error("Erreur suppression commande:", err);
@@ -377,6 +379,11 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
       }
     });
   };
+
+  const ordersPrep = orders.filter(o => o.statut.toLowerCase() !== "expedie");
+  const ordersDelivered = orders.filter(o => o.statut.toLowerCase() === "expedie");
+
+  const visibleOrders = orderViewMode === "prep" ? ordersPrep : ordersDelivered;
 
  const renderDashboard = () => (
     <>
@@ -510,15 +517,61 @@ export default function ClientDashboardPage({ profileUser, activeTab, onChangeTa
         </CardTitle>
       </CardHeader>
 
-      <CardContent>
-        {ordersLoading && <p className="mt-4 text-gray-500">Chargement...</p>}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: "6px",
+          padding: "6px 12px 0px 12px", // 🔥 Réduction massive de l’espace haut/bas + légère marge interne
+        }}
+      >
+        <button
+          onClick={() => setOrderViewMode("prep")}
+          style={{
+            padding: "6px 14px",
+            borderRadius: "8px",
+            fontSize: "13px",
+            fontWeight: 600,
+            cursor: "pointer",
+            border: "1px solid #d1d5db",
+            backgroundColor:
+              orderViewMode === "prep" ? "#2563eb" : "#f3f4f6",
+            color: orderViewMode === "prep" ? "white" : "#374151",
+            transition: "0.2s",
+          }}
+        >
+          En préparation
+        </button>
 
+        <button
+          onClick={() => setOrderViewMode("delivered")}
+          style={{
+            padding: "6px 14px",
+            borderRadius: "8px",
+            fontSize: "13px",
+            fontWeight: 600,
+            cursor: "pointer",
+            border: "1px solid #d1d5db",
+            backgroundColor:
+              orderViewMode === "delivered" ? "#374151" : "#f3f4f6",
+            color: orderViewMode === "delivered" ? "white" : "#374151",
+            transition: "0.2s",
+          }}
+        >
+          Livré
+        </button>
+      </div>
+      
+      <CardContent>
         {!ordersLoading && orders.length === 0 && (
           <p className="mt-4 text-gray-500">Aucune commande pour le moment.</p>
         )}
 
-        <div className="space-y-4 mt-4">
-          {orders.map((o) => {
+        <div className="grid gap-6 mt-3"
+          style={{
+            gridTemplateColumns: "repeat(2, 1fr)",
+          }}>
+          {visibleOrders.map((o) => {
             const fraisLivraison = Number(o.livraison?.frais_livraison ?? 0);
             const totalGeneral = Number(o.total);
             const totalProduits = Math.max(0, totalGeneral - fraisLivraison);
