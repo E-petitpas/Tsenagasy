@@ -281,7 +281,7 @@ export default function HomePublic({ currentUser, onLogin, }: HomePublicProps) {
 
           <div className="border-t border-gray-700 mt-8 pt-8 text-center">
             <p className="text-gray-400 text-sm">
-              © 2024 Tsena.mg - Made with ❤️ in Madagascar
+              © 2025 Tsena.mg - Made with ❤️ in Madagascar
             </p>
           </div>
         </div>
