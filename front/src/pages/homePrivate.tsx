@@ -243,7 +243,7 @@ export default function HomePrivate({currentUser, onLogout }: HomePrivateProps) 
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
-              <h3 className="text-xl font-bold text-[#4CAF50] mb-4">Tsena.mg</h3>
+              <h3 className="text-xl font-bold text-[#4CAF50] mb-4">TsenaGasy</h3>
               <p className="text-gray-300 text-sm mb-4">
                 La marketplace qui valorise l'économie malgache et connecte acheteurs et vendeurs locaux.
               </p>

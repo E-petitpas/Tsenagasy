@@ -81,7 +81,7 @@ export function Header({ cartItemCount = 0, onLoginClick, onCartClick, onProfile
               </SheetContent>
             </Sheet>
             <div>
-              <div className="text-2xl font-bold text-[#2D8A47]">Tsena.mg</div>
+              <div className="text-2xl font-bold text-[#2D8A47]">TsenaGasy</div>
               {/* <div className="text-xs text-orange-600 font-medium hidden md:block">MODE DÉMO</div> */}
             </div>
           </div>
