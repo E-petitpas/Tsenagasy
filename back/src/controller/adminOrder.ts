@@ -119,6 +119,7 @@ export const getPendingLinesForVendor = async (req: Request, res: Response) => {
             nom: true,
             images: true,
             prix: true,
+            stock: true,
           },
         },
         vente: {

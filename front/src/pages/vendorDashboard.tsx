@@ -1255,7 +1255,9 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
                 </TableCell>
               </TableRow>
             ) : (
-              visibleLines.map((l) => (
+                visibleLines.map((l) => {
+                  const isRupture = l.produit.stock < l.quantite;
+                  return (
                 <TableRow key={l.id}>
                   {/* CLIENT */}
                   <TableCell>
@@ -1273,7 +1275,19 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
                         alt={l.produit.nom}
                         className="w-10 h-10 rounded object-cover"
                       />
-                      <span>{l.produit.nom}</span>
+                      <div className="flex flex-col">
+                        <span>{l.produit.nom}</span>
+
+                        <span
+                          className={`text-xs ${
+                            isRupture
+                              ? "text-red-600 font-semibold"
+                              : "text-gray-500"
+                          }`}
+                        >
+                          Stock : {l.produit.stock}
+                        </span>
+                      </div>
                     </div>
                   </TableCell>
 
@@ -1293,8 +1307,21 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
                   {/* ACTION */}
                   <TableCell className="text-center space-x-2">
                     <div className="flex justify-center">
+                      {/* 🔴 BADGE RUPTURE */}
+                        {isRupture && (
+                          <span className="
+                            px-2 py-0.5
+                            text-xs font-semibold
+                            rounded-full
+                            bg-red-100 text-red-700
+                            border border-red-300
+                          ">
+                            Rupture
+                          </span>
+                      )}
+                      
                       {/* ➤ Bouton dépôt — montré UNIQUEMENT dans "En attente" */}
-                      {lineViewMode === "pending" && (
+                      {lineViewMode === "pending" && !isRupture && (
                         <Button
                           size="sm"
                           title="Marquer comme déposé"
@@ -1322,7 +1349,7 @@ export default function VendorDashboard({ currentUser, activeView, onChangeView 
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+              )})
             )}
           </TableBody>
         </Table>
